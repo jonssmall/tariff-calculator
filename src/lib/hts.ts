@@ -40,8 +40,10 @@ export interface Meta {
   source: string;
   endpoint: string;
   fetchedAt: string;
+  release: string;
   rows: number;
   entries: number;
+  remedies: { headings: number; coveredCodes: number; scoped: number; lists: number; section301: number; conflicts: number; suspended: number };
   chapters: { ch: string; title: string; count: number }[];
 }
 
@@ -61,6 +63,14 @@ async function fetchJson<T>(path: string): Promise<T> {
 
 export function loadMeta(): Promise<Meta> {
   return fetchJson<Meta>("meta.json");
+}
+
+let remedyPromise: Promise<import("./remedies.ts").RemedyData> | undefined;
+
+/** Chapter 99 additional-duty data. Cached for the page's lifetime. */
+export function loadRemedies(): Promise<import("./remedies.ts").RemedyData> {
+  remedyPromise ??= fetchJson<import("./remedies.ts").RemedyData>("remedies.json");
+  return remedyPromise;
 }
 
 /** Load and rehydrate the search index. Cached for the page's lifetime. */

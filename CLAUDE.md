@@ -49,6 +49,40 @@ the scripts, and the reasoning behind the build-time data fetch.
   them after 60 days of repository inactivity. A silently-stopped morning
   refresh is the expected failure here, not a bug.
 
+- **Section 301 coverage comes from the official "China Tariffs" table, not the
+  notes.** It is a clean two-column mapping in the same release API and is
+  authoritative. The note parser still runs over those headings purely as a
+  cross-check; do not make it the source of truth again. Section 232 and IEEPA
+  have no such table and still depend on the note parser.
+- **Suspended provisions must be excluded.** A heading stays in the schedule
+  after suspension, marked only by "[Compiler's note: provision suspended.]",
+  and its coverage table is still printed. 9903.88.16 (+15%) and 9903.01.63
+  (+34%) are currently suspended. Applying one adds duty that is not owed.
+- **Chapter 99 coverage is anchored to named headings, not subdivision labels.**
+  `parseHeadingCoverage()` only attributes a code table to a heading the
+  introducing prose actually names ("Heading 9903.88.03 applies to..." or "the
+  rates of duty set forth in headings ... apply to"). Going by subdivision label
+  merges unrelated tables across page breaks. Do not loosen this to raise
+  coverage — a wrongly applied heading adds 25% silently.
+- **Scope must come from a subject-position sentence.** One sentence often
+  introduces several headings sharing a coverage list but not a country; note
+  37(f) names both 9903.76.03 (most origins) and 9903.76.20 (UK only). Reading
+  scope from a listing sentence gave the UK heading worldwide scope and applied
+  10% to everything. `parseHeadingScopes()` prefers "heading X applies/provides"
+  and refuses to fall back once such a sentence exists.
+- **`pdftotext` is a hard dependency of `npm run data`** and is not on the
+  GitHub runner image; the workflow installs poppler-utils. `-layout` is
+  required — without it the note columns interleave and the lists are garbage.
+- **Nested subdivisions inherit their parent's heading via the trailing colon,
+  not indentation.** "(s) Heading 9903.88.15 applies to:" and its child "(i)"
+  are both indented twelve spaces, so indent-based nesting silently drops the
+  heading and the codes leak to whichever heading was seen last. That leak
+  charged cotton T-shirts 25% (List 2) instead of 7.5% (List 4A).
+- **Regression cases live in the README table.** 9403.60.80.93 must be 50% from
+  China, 25% from Vietnam, 0% from Germany and the UK; 6109.10.00.12 must be
+  24.47% from China; 8703.80.00.20 must be 102.97% from China. Any change to the note parsing has to keep those, and they
+  are the cases the client checks.
+
 ## Content rules
 
 - The tariff data is real and current as of the retrieval date shown in the

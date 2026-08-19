@@ -18,12 +18,22 @@
  * Run `npm run data` to refresh. USITC revises the HTS several times a year.
  */
 import { mkdir, writeFile, rm } from "node:fs/promises";
+import {
+  fetchChapter99Text,
+  fetchSection301Coverage,
+  parseCoverageLists,
+  parseHeadingScopes,
+  parseNoteRefs,
+  parseUplift,
+  type Scope,
+} from "./parse-ch99.ts";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "public", "data");
 const API = "https://hts.usitc.gov/reststop/exportList";
+const RELEASE_API = "https://hts.usitc.gov/reststop/currentRelease";
 
 /** One row exactly as the API returns it. */
 interface ApiRow {
@@ -217,17 +227,199 @@ function buildEntries(rows: ApiRow[]): Entry[] {
   return entries;
 }
 
+/** A Chapter 99 additional-duty heading and the goods it reaches. */
+interface Remedy {
+  /** Chapter 99 heading, e.g. "9903.88.03". */
+  heading: string;
+  /** Additive rate as a fraction; 0 for headings that add nothing. */
+  uplift: number;
+  /** Rate text as published. */
+  rateText: string;
+  description: string;
+  /** Note subdivisions cited, e.g. ["20(e)", "20(f)"]. */
+  noteRefs: string[];
+  /** Country scope, as far as the notes could be read. */
+  scope: Scope;
+  /** Headings that carve goods out of this one. */
+  exceptHeadings: string[];
+}
+
+/**
+ * The release the API is currently serving, e.g. "2026HTSRev16".
+ *
+ * `exportList` has no release parameter and always serves current, while the
+ * Chapter 99 notes are fetched by explicit release. On an unattended daily run
+ * a revision landing between the two calls would pair a schedule with the wrong
+ * notes, and the failure is silent — wrong coverage, no error. So the release
+ * is read before and after and the build fails if it moved.
+ */
+async function currentRelease(): Promise<string> {
+  const res = await fetch(RELEASE_API, { signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) throw new Error(`currentRelease failed: ${res.status}`);
+  const body = (await res.json()) as { name?: string };
+  if (!body.name) throw new Error("currentRelease returned no release name");
+  return body.name;
+}
+
 /** Chapter number from a dotted HTS code: "6109.10.00" -> "61". */
 const chapterOf = (code: string): string => code.replace(/\D/g, "").slice(0, 2).padStart(2, "0");
 
+/**
+ * Build the Chapter 99 remedy records and the reverse index from ordinary
+ * codes to the headings that reach them.
+ */
+async function buildRemedies(
+  rows: ApiRow[],
+  release: string,
+): Promise<{ remedies: Remedy[]; coverage: Record<string, string[]>; stats: { headings: number; coveredCodes: number; scoped: number; lists: number; section301: number; conflicts: number; suspended: number } }> {
+  process.stdout.write("fetching Chapter 99 notes (PDF)\n");
+  const notesText = await fetchChapter99Text(release);
+  const lists = parseCoverageLists(notesText);
+  process.stdout.write(`  ${lists.size} headings with a coverage list in the notes\n`);
+
+  // Chapter 99 headings that impose or waive an additional duty.
+  const headingRows = rows.filter((r) => (r.htsno ?? "").startsWith("9903") && (r.general ?? "").trim());
+  const scopes = parseHeadingScopes(notesText, headingRows.map((r) => r.htsno.trim()));
+  process.stdout.write(`  ${scopes.size} of ${headingRows.length} headings had a readable country scope\n`);
+
+  // The official Section 301 table. Authoritative where it speaks.
+  const official = await fetchSection301Coverage(release);
+  process.stdout.write(`  ${official.size.toLocaleString("en-US")} rows in the official Section 301 table\n`);
+
+  const remedies: Remedy[] = [];
+  const suspended: string[] = [];
+  /** digits-only ordinary code -> heading codes */
+  const coverage = new Map<string, Set<string>>();
+  const addCoverage = (code: string, heading: string): void => {
+    let set = coverage.get(code);
+    if (!set) coverage.set(code, (set = new Set()));
+    set.add(heading);
+  };
+
+  for (const row of headingRows) {
+    const heading = row.htsno.trim();
+    const description = stripTags(row.description ?? "");
+    const rateText = stripTags(row.general ?? "");
+    const uplift = parseUplift(rateText);
+    if (uplift === null) continue; // not a simple uplift; nothing to stack
+
+    /*
+     * Suspended provisions must never be applied.
+     *
+     * The schedule keeps a heading in place after it is suspended and marks it
+     * only in a compiler's note — 9903.88.16 is the old List 4B at 15%, which
+     * never came into force, and 9903.01.63 was suspended by Federal Register
+     * notice. Their coverage tables are still printed in the U.S. Notes, so a
+     * parser reading the notes will happily pick them up and add duty that is
+     * not owed. The official Section 301 table already omits them; this drops
+     * them everywhere else.
+     */
+    if (/provision suspended/i.test(description)) {
+      suspended.push(heading);
+      continue;
+    }
+
+    const noteRefs = parseNoteRefs(description);
+    const exceptHeadings = [
+      ...new Set(
+        [...description.matchAll(/9903\.\d{2}\.\d{2}/g)]
+          .map((m) => m[0])
+          .filter((h) => h !== heading),
+      ),
+    ];
+
+    remedies.push({
+      heading,
+      uplift,
+      rateText,
+      description,
+      noteRefs,
+      scope: scopes.get(heading) ?? { kind: "unknown", text: "" },
+      exceptHeadings,
+    });
+
+    // Section 301 coverage comes from the official table, so skip the
+    // note-derived list for those headings and let the cross-check below
+    // compare them instead.
+    if (!/^9903\.(88|91|92)\./.test(heading)) {
+      for (const code of lists.get(heading) ?? []) addCoverage(code, heading);
+    }
+  }
+
+  for (const [code, heading] of official) addCoverage(code, heading);
+
+  /*
+   * Cross-check the prose parser against the official table.
+   *
+   * The note parser is no longer the source of truth for Section 301, but it
+   * still reads the same notes, so a disagreement means one of the two has
+   * drifted — a heading renumbered, a table reformatted, a note rewritten. It
+   * costs nothing to compare and it is the only signal that would catch the
+   * document format changing under us. Missing entries are expected and fine;
+   * a contradiction is not.
+   */
+  let conflicts = 0;
+  const suspendedSet = new Set(suspended);
+  for (const [heading, codes] of lists) {
+    if (!/^9903\.(88|91|92)\./.test(heading)) continue;
+    // A suspended heading's table is still printed; the official table
+    // correctly omits it, and that difference is expected, not drift.
+    if (suspendedSet.has(heading)) continue;
+    for (const code of codes) {
+      const truth = official.get(code);
+      if (truth && truth !== heading) conflicts++;
+    }
+  }
+  if (conflicts > 0) {
+    process.stdout.write(
+      `  WARNING: ${conflicts} disagreements between the notes and the official Section 301 table\n`,
+    );
+  }
+
+  const flat: Record<string, string[]> = {};
+  for (const [code, set] of coverage) flat[code] = [...set];
+
+  return {
+    remedies,
+    coverage: flat,
+    stats: {
+      headings: remedies.length,
+      coveredCodes: coverage.size,
+      scoped: scopes.size,
+      lists: lists.size,
+      section301: official.size,
+      conflicts,
+      suspended: suspended.length,
+    },
+  };
+}
+
 async function main(): Promise<void> {
+  const release = await currentRelease();
+  process.stdout.write(`release ${release}\n`);
   const rows = await fetchSchedule();
   const entries = buildEntries(rows);
   process.stdout.write(`  ${entries.length} rate-bearing lines\n`);
   assertPlausible(rows, entries);
 
+  const { remedies, coverage, stats } = await buildRemedies(rows, release);
+  process.stdout.write(
+    `  ${stats.headings} remedy headings covering ${stats.coveredCodes.toLocaleString("en-US")} codes` +
+      `${stats.suspended > 0 ? `, ${stats.suspended} suspended and excluded` : ""}\n`,
+  );
+
+  // The schedule and the notes must come from the same revision.
+  const releaseAfter = await currentRelease();
+  if (releaseAfter !== release) {
+    throw new Error(
+      `USITC published ${releaseAfter} while this build was reading ${release}. ` +
+        "Re-run so the schedule and the Chapter 99 notes come from one revision.",
+    );
+  }
+
   await rm(OUT, { recursive: true, force: true });
   await mkdir(join(OUT, "chapter"), { recursive: true });
+  await writeFile(join(OUT, "remedies.json"), JSON.stringify({ remedies, coverage }));
 
   // Per-chapter files: the app fetches only the chapter it needs.
   const byChapter = new Map<string, Entry[]>();
@@ -286,8 +478,10 @@ async function main(): Promise<void> {
       source: "USITC Harmonized Tariff Schedule REST API",
       endpoint: `${API}?from=0101&to=9999&format=JSON&styles=true`,
       fetchedAt: new Date().toISOString(),
+      release,
       rows: rows.length,
       entries: entries.length,
+      remedies: stats,
       chapters: [...byChapter.keys()].sort().map((ch) => ({
         ch,
         title: titles.get(ch) ?? "",

@@ -237,6 +237,88 @@
     text-align: right;
   }
 
+  /* Chapter 99 band. Set apart from the ordinary duty rows because these are
+     separate headings on the entry, not components of one rate. */
+  .remedy-block {
+    margin: 0.75rem 0 0.25rem;
+    padding: 0.75rem;
+    border: 1px solid var(--color-rule);
+    border-radius: 5px;
+    background: var(--color-ink-50);
+  }
+  .remedy {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 0.625rem;
+    align-items: start;
+    padding: 0.5rem;
+    border-radius: 4px;
+    cursor: pointer;
+  }
+  .remedy:hover {
+    background: white;
+  }
+  .remedy input {
+    margin-top: 0.15rem;
+    width: 0.9rem;
+    height: 0.9rem;
+    accent-color: var(--color-remedy);
+  }
+  .remedy-body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    min-width: 0;
+  }
+  .remedy-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+  .remedy-code {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    font-weight: 600;
+  }
+  .remedy-uplift {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-remedy);
+  }
+  .remedy-flag {
+    font-size: 0.625rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-warn);
+    border: 1px solid currentcolor;
+    border-radius: 3px;
+    padding: 0 0.3rem;
+  }
+  .remedy-desc {
+    font-size: 0.75rem;
+    line-height: 1.45;
+    color: var(--color-ink-700);
+  }
+  .remedy-reason {
+    font-size: 0.6875rem;
+    line-height: 1.45;
+    color: var(--color-ink-500);
+  }
+  .remedy-amount {
+    font-family: var(--font-mono);
+    font-size: 0.8125rem;
+    text-align: right;
+    white-space: nowrap;
+    color: var(--color-ink-400);
+  }
+  .remedy-on .remedy-amount {
+    color: var(--color-ink);
+    font-weight: 600;
+  }
+
   .notice {
     border-left: 3px solid;
     border-radius: 0 4px 4px 0;

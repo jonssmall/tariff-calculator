@@ -20,6 +20,7 @@
 import type { Entry } from "./hts.ts";
 import { parseRate, parseSpecial, requiredUnits, unitLabel, unitLabelSingular, type ParsedRate } from "./rates.ts";
 import { PROGRAMS, type Country } from "./programs.ts";
+import type { RemedyMatch } from "./remedies.ts";
 
 /**
  * CBP user fees, fiscal year 2026 (effective 1 October 2025, CBP Dec. 25-10).
@@ -47,6 +48,10 @@ export interface CalcInput {
   customsValue: number;
   quantities: Quantities;
   mode: Mode;
+  /** Chapter 99 headings that reach these goods and this origin. */
+  remedies?: RemedyMatch[];
+  /** Which of those the user has applied. Defaults to the confirmed ones. */
+  appliedHeadings?: Set<string>;
 }
 
 export interface Charge {
@@ -54,7 +59,7 @@ export interface Charge {
   amount: number;
   /** How the number was arrived at. */
   formula: string;
-  kind: "duty" | "fee";
+  kind: "duty" | "remedy" | "fee";
 }
 
 export interface Notice {
@@ -81,6 +86,10 @@ export interface CalcResult {
   notices: Notice[];
   /** The General-column outcome, for comparison when a preference applied. */
   generalDuty: number | null;
+  /** Chapter 99 additional duty applied, in dollars. */
+  remedyTotal: number;
+  /** Combined additive rate of the applied Chapter 99 headings. */
+  remedyRate: number;
 }
 
 const money = (n: number): string =>
@@ -222,12 +231,42 @@ function selectColumn(entry: Entry, country: Country): {
 }
 
 export function calculate(input: CalcInput): CalcResult {
-  const { entry, country, customsValue, quantities, mode } = input;
+  const { entry, country, customsValue, quantities, mode, remedies = [] } = input;
+  const applied =
+    input.appliedHeadings ??
+    new Set(remedies.filter((m) => m.confidence === "confirmed").map((m) => m.remedy.heading));
   const selected = selectColumn(entry, country);
   const notices = [...selected.notices];
 
-  const applied = applyRate(selected.rate, customsValue, quantities);
-  const charges = [...applied.charges];
+  const appliedRate = applyRate(selected.rate, customsValue, quantities);
+  const charges = [...appliedRate.charges];
+
+  /*
+   * Chapter 99 additional duties.
+   *
+   * These are separate headings declared alongside the ordinary classification,
+   * and their rate text reads "The duty provided in the applicable subheading
+   * + 25%" — the uplift is ad valorem on customs value and additive with both
+   * the ordinary duty and each other. Section 301 and Section 232 stack: goods
+   * can carry both, which is how a Free-rated line ends up at 50%.
+   */
+  let remedyTotal = 0;
+  let remedyRate = 0;
+  for (const match of remedies) {
+    if (!applied.has(match.remedy.heading)) continue;
+    const amount = customsValue * match.remedy.uplift;
+    remedyTotal += amount;
+    remedyRate += match.remedy.uplift;
+    charges.push({
+      label: `${match.remedy.heading} — ${match.remedy.uplift === 0 ? "no additional duty" : `+${pct(match.remedy.uplift)}`}`,
+      amount,
+      formula:
+        match.remedy.uplift === 0
+          ? "Heading applies but imposes no additional duty"
+          : `${money(customsValue)} × ${pct(match.remedy.uplift)}`,
+      kind: "remedy",
+    });
+  }
 
   // Merchandise processing fee — ad valorem with a floor and a cap, charged on
   // formal entries regardless of the duty outcome. Free-rate goods still pay it.
@@ -258,7 +297,9 @@ export function calculate(input: CalcInput): CalcResult {
   }
 
   const feeTotal = mpf + hmf;
-  const dutyTotal = applied.total;
+  // A non-computable ordinary rate does not prevent the Chapter 99 uplift from
+  // being known, but the two cannot be summed, so the total stays null.
+  const dutyTotal = appliedRate.total === null ? null : appliedRate.total + remedyTotal;
   const grandTotal = dutyTotal === null ? null : dutyTotal + feeTotal;
 
   if (!selected.rate.computable && !selected.rate.free) {
@@ -268,11 +309,11 @@ export function calculate(input: CalcInput): CalcResult {
       body: `${selected.rate.note ?? "The rate could not be interpreted."} The published text is "${selected.rate.text}". Fees below are still shown because they do not depend on the duty rate.`,
     });
   }
-  if (applied.missing.length > 0) {
+  if (appliedRate.missing.length > 0) {
     notices.push({
       tone: "info",
       title: "Quantity needed",
-      body: `This line carries a specific duty, so the duty depends on quantity as well as value. Enter ${applied.missing.map(unitLabel).join(" and ")} to complete the calculation.`,
+      body: `This line carries a specific duty, so the duty depends on quantity as well as value. Enter ${appliedRate.missing.map(unitLabel).join(" and ")} to complete the calculation.`,
     });
   }
   if (entry.rateFrom) {
@@ -290,10 +331,27 @@ export function calculate(input: CalcInput): CalcResult {
     });
   }
 
+  const unresolved = remedies.filter((m) => m.confidence === "possible");
+  if (unresolved.length > 0) {
+    notices.push({
+      tone: "warn",
+      title: `${unresolved.length} additional-duty heading${unresolved.length === 1 ? "" : "s"} could not be confirmed`,
+      body: `These goods appear in the coverage list for ${unresolved.map((m) => m.remedy.heading).join(", ")}, but the notes state the country scope in prose this tool could not read. They are listed above, switched off. Read the heading before deciding.`,
+    });
+  }
+
+  if (remedies.length === 0) {
+    notices.push({
+      tone: "warn",
+      title: "No additional duties matched — this is not proof there are none",
+      body: "Nothing in the Chapter 99 coverage lists this tool could read reaches this classification and origin. Those lists are mined from the U.S. Notes, which state coverage in prose, and the extraction is incomplete: many headings' coverage could not be attributed automatically. Section 301, Section 232 and IEEPA duties frequently apply to lines that show nothing here. Check the Chapter 99 headings directly before relying on this.",
+    });
+  }
+
   notices.push({
     tone: "warn",
-    title: "Trade remedies and AD/CVD are not included",
-    body: "Chapter 99 remedy duties — Sections 201, 232 and 301, and the IEEPA-based actions — stack on top of the rates above, and antidumping or countervailing duty deposits are set per producer and can exceed the ordinary duty many times over. Neither is derivable from the tariff schedule alone. Check the Chapter 99 annexes and the ITA's AD/CVD orders for the specific goods and producer before treating any figure here as the landed duty.",
+    title: "AD/CVD is not included, and Chapter 99 coverage is partial",
+    body: "Antidumping and countervailing duty deposits are set per producer, frequently exceed the ordinary duty many times over, and cannot be derived from the tariff schedule — check the ITA's orders for the specific goods and producer. The Chapter 99 additional duties shown here are read from the U.S. Notes, which state coverage as lists and scope as prose; lists parse reliably, scope does not always. Treat the headings above as a starting point for verification, not a filing.",
   });
 
   const generalApplied = applyRate(parseRate(entry.general), customsValue, quantities);
@@ -308,7 +366,7 @@ export function calculate(input: CalcInput): CalcResult {
           : "Column 1 General",
     rate: selected.rate,
     ...(selected.claimedCode ? { claimedCode: selected.claimedCode } : {}),
-    missingUnits: applied.missing,
+    missingUnits: appliedRate.missing,
     charges,
     dutyTotal,
     feeTotal,
@@ -316,5 +374,7 @@ export function calculate(input: CalcInput): CalcResult {
     effectiveRate: grandTotal === null || customsValue <= 0 ? null : grandTotal / customsValue,
     notices,
     generalDuty: generalApplied.total,
+    remedyTotal,
+    remedyRate,
   };
 }

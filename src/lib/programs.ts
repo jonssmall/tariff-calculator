@@ -140,6 +140,17 @@ export const COUNTRIES: Country[] = [
   { iso: "VN", name: "Vietnam", programs: ["K", "L"] },
 ];
 
+/**
+ * EU member states, for Chapter 99 notes that scope by the bloc rather than by
+ * country ("all countries other than ... the member nations of the European
+ * Union"). Only members present in COUNTRIES need listing for matching to work,
+ * but the full set is kept so adding a country does not silently break a scope.
+ */
+export const EU_MEMBERS = new Set([
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU",
+  "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
+]);
+
 export const COUNTRY_BY_ISO = new Map(COUNTRIES.map((c) => [c.iso, c]));
 
 /** Program codes on a line that the given country can actually claim. */

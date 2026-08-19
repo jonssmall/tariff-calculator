@@ -36,6 +36,12 @@ jobs:
 
       - run: npm ci
 
+      # The Chapter 99 U.S. Notes — which say which goods each Section 301/232
+      # heading covers — are published only as a PDF, so the data step needs a
+      # PDF text extractor. It is not present on the runner image by default.
+      - name: Install pdftotext
+        run: sudo apt-get install -y poppler-utils
+
       # The USITC API allowlists only its own CORS origin, so this call cannot
       # happen in the browser. It runs here instead and the result is baked
       # into the build. public/data/ is gitignored deliberately: committing

@@ -6,9 +6,10 @@
  * than the problem needs. Rendering is a full redraw of the output panel on
  * every input change, which at this size is cheaper than reconciling.
  */
-import { search, getEntry, loadMeta, type Entry, type Hit } from "./lib/hts.ts";
+import { search, getEntry, loadMeta, loadRemedies, type Entry, type Hit } from "./lib/hts.ts";
 import { parseRate, parseSpecial, requiredUnits, unitLabel } from "./lib/rates.ts";
 import { calculate, type CalcResult, type Mode } from "./lib/calc.ts";
+import { matchRemedies, type RemedyData, type RemedyMatch } from "./lib/remedies.ts";
 import { COUNTRIES, COUNTRY_BY_ISO, PROGRAMS, AS_OF } from "./lib/programs.ts";
 
 const $ = <T extends Element = HTMLElement>(sel: string): T => {
@@ -38,6 +39,37 @@ const quantityFields = $("[data-quantity-fields]");
 const output = $("[data-output]");
 
 let selected: Entry | undefined;
+let remedyData: RemedyData | undefined;
+let remedyMatches: RemedyMatch[] = [];
+/** Headings the user has switched on. Rebuilt from confidence on each change. */
+let appliedHeadings = new Set<string>();
+
+void loadRemedies().then((data) => {
+  remedyData = data;
+  if (selected) {
+    refreshRemedies();
+    render();
+  }
+});
+
+/**
+ * Recompute which Chapter 99 headings reach the current line and origin, and
+ * reset the applied set to the confirmed ones. The reset is deliberate: a
+ * heading the user switched on for China must not silently carry over when the
+ * origin changes to Germany, where it may not apply at all.
+ */
+function refreshRemedies(): void {
+  const country = COUNTRY_BY_ISO.get(countrySelect.value);
+  if (!remedyData || !selected || !country) {
+    remedyMatches = [];
+    appliedHeadings = new Set();
+    return;
+  }
+  remedyMatches = matchRemedies(remedyData, selected.code, country);
+  appliedHeadings = new Set(
+    remedyMatches.filter((m) => m.confidence === "confirmed").map((m) => m.remedy.heading),
+  );
+}
 
 /* ---------------------------------------------------------------- provenance */
 
@@ -158,6 +190,7 @@ async function select(code: string): Promise<void> {
   $("[data-rate-other]").textContent = entry.other || "—";
 
   renderQuantityFields(entry);
+  refreshRemedies();
   detail.scrollIntoView({ behavior: "smooth", block: "nearest" });
   render();
 }
@@ -236,8 +269,62 @@ function render(): void {
   const customsValue = Math.max(Number.parseFloat(valueInput.value) || 0, 0);
 
   output.innerHTML = renderOutput(
-    calculate({ entry: selected, country, customsValue, quantities, mode }),
+    calculate({
+      entry: selected,
+      country,
+      customsValue,
+      quantities,
+      mode,
+      remedies: remedyMatches,
+      appliedHeadings,
+    }),
     customsValue,
+  );
+}
+
+/**
+ * The Chapter 99 band of the ledger.
+ *
+ * Every heading that reaches these goods is listed, whether or not it is
+ * applied, because the ones that are switched off are exactly the ones a user
+ * needs to see — a silently omitted 25% is indistinguishable from no duty.
+ * Confirmed matches are on by default; matches whose country scope could not be
+ * read from the notes are off, with the reason shown.
+ */
+function renderRemedies(customsValue: number): string {
+  if (remedyMatches.length === 0) return "";
+
+  const rows = remedyMatches
+    .map((match) => {
+      const on = appliedHeadings.has(match.remedy.heading);
+      const amount = customsValue * match.remedy.uplift;
+      const uplift =
+        match.remedy.uplift === 0 ? "no additional duty" : `+${(match.remedy.uplift * 100).toFixed(2).replace(/\.?0+$/, "")}%`;
+      const notes = match.remedy.noteRefs.length
+        ? `U.S. note ${match.remedy.noteRefs.join(", ")}`
+        : "";
+      return (
+        `<label class="remedy${on ? " remedy-on" : ""}">` +
+        `<input type="checkbox" data-heading="${escape(match.remedy.heading)}"${on ? " checked" : ""} />` +
+        `<span class="remedy-body">` +
+        `<span class="remedy-head"><span class="remedy-code">${escape(match.remedy.heading)}</span>` +
+        `<span class="remedy-uplift">${escape(uplift)}</span>` +
+        (match.confidence === "possible" ? `<span class="remedy-flag">verify</span>` : "") +
+        `</span>` +
+        `<span class="remedy-desc">${escape(match.remedy.description.slice(0, 190))}${match.remedy.description.length > 190 ? "…" : ""}</span>` +
+        `<span class="remedy-reason">${escape(match.reason)}${notes ? ` · ${escape(notes)}` : ""}</span>` +
+        `</span>` +
+        `<span class="remedy-amount">${on ? money(amount) : "—"}</span>` +
+        `</label>`
+      );
+    })
+    .join("");
+
+  return (
+    `<div class="remedy-block">` +
+    `<p class="label">Additional duties · Chapter 99</p>` +
+    `<p class="hint">Section 301, Section 232 and IEEPA duties are separate headings declared alongside the classification, and they stack on the rate above. Switch a heading off to exclude it.</p>` +
+    `<div class="mt-2">${rows}</div></div>`
   );
 }
 
@@ -245,14 +332,14 @@ function renderOutput(result: CalcResult, customsValue: number): string {
   const tone =
     result.column === "column2" ? "remedy" : result.column === "special" ? "free" : "ink-600";
 
-  const charges = result.charges
-    .map(
-      (charge) =>
-        `<div class="charge"><div class="charge-label">${escape(charge.label)}</div>` +
-        `<div class="charge-amount">${money(charge.amount)}</div>` +
-        `<div class="charge-formula">${escape(charge.formula)}</div></div>`,
-    )
-    .join("");
+  const chargeRow = (charge: { label: string; amount: number; formula: string }): string =>
+    `<div class="charge"><div class="charge-label">${escape(charge.label)}</div>` +
+    `<div class="charge-amount">${money(charge.amount)}</div>` +
+    `<div class="charge-formula">${escape(charge.formula)}</div></div>`;
+
+  const dutyCharges = result.charges.filter((c) => c.kind === "duty").map(chargeRow).join("");
+  const feeCharges = result.charges.filter((c) => c.kind === "fee").map(chargeRow).join("");
+  const remedySection = renderRemedies(customsValue);
 
   const notices = result.notices
     .map(
@@ -280,7 +367,9 @@ function renderOutput(result: CalcResult, customsValue: number): string {
         <p class="font-mono text-sm">${escape(result.rate.text || "—")}</p>
       </div>
 
-      <div class="mt-2">${charges}</div>
+      <div class="mt-2">${dutyCharges}</div>
+      ${remedySection}
+      <div>${feeCharges}</div>
 
       <div class="mt-4 flex flex-wrap items-baseline justify-between gap-2 border-t-2 border-ink pt-3">
         <div>
@@ -290,7 +379,11 @@ function renderOutput(result: CalcResult, customsValue: number): string {
               ? `<p class="mt-1 text-xs text-ink-500">Duty not calculated — see the notes below.</p>`
               : `<p class="mt-1 text-xs text-ink-500">
                    ${money(result.dutyTotal!)} duty + ${money(result.feeTotal)} fees
-                   on ${money(customsValue)} of goods
+                   on ${money(customsValue)} of goods${
+                     result.remedyRate > 0
+                       ? ` · ${escape(result.rate.text)} base + ${(result.remedyRate * 100).toFixed(0)}% Chapter 99`
+                       : ""
+                   }
                  </p>`
           }
         </div>
@@ -322,6 +415,21 @@ function renderOutput(result: CalcResult, customsValue: number): string {
 
 form.addEventListener("input", render);
 form.addEventListener("change", render);
+countrySelect.addEventListener("change", () => {
+  refreshRemedies();
+  render();
+});
+
+// The output panel is replaced wholesale on each render, so the remedy toggles
+// are handled by delegation rather than per-element listeners.
+output.addEventListener("change", (event) => {
+  const box = (event.target as HTMLElement).closest<HTMLInputElement>("input[data-heading]");
+  if (!box) return;
+  const heading = box.dataset["heading"]!;
+  if (box.checked) appliedHeadings.add(heading);
+  else appliedHeadings.delete(heading);
+  render();
+});
 
 /* Deep-link support: /?code=6109.10.00.12 opens straight to a line. */
 const initial = new URLSearchParams(location.search).get("code");
