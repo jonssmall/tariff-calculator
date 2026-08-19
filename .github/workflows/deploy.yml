@@ -1,0 +1,76 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+  # Refresh the tariff snapshot every morning. Cron is UTC: 09:00 UTC is
+  # 05:00 US Eastern in summer, 04:00 in winter. USITC revises the HTS only a
+  # few times a year, so this is mostly a no-op that keeps the published
+  # retrieval date current — but it means a revision never sits unnoticed for
+  # more than a day.
+  schedule:
+    - cron: "0 9 * * *"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time; let an in-flight run finish rather than
+# cancel it, so Pages never serves a half-deployed build.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # The USITC API allowlists only its own CORS origin, so this call cannot
+      # happen in the browser. It runs here instead and the result is baked
+      # into the build. public/data/ is gitignored deliberately: committing
+      # 13 MB of regenerated JSON every morning would bloat the repository's
+      # history for no benefit, since the snapshot is reproducible from the API.
+      - name: Fetch tariff schedule from USITC
+        run: npm run data
+
+      - name: Build
+        env:
+          # A project page (the default for a repo not named
+          # <owner>.github.io) is served from /<repo-name>/, not "/".
+          # Leave unset for a custom domain or a user/org root page.
+          BASE_PATH: /${{ github.event.repository.name }}/
+        run: npm run build
+
+      - uses: actions/configure-pages@v5
+        with:
+          # First run on a repo that's never had Pages configured 404s
+          # otherwise — this lets the action create the Pages site itself
+          # using the pages: write permission already granted above, instead
+          # of requiring the Settings → Pages → Source toggle to be flipped
+          # by hand first.
+          enablement: true
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

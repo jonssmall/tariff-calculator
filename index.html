@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>HTS Tariff Calculator</title>
+    <meta
+      name="description"
+      content="Look up a Harmonized Tariff Schedule classification and calculate US import duty, merchandise processing fee and harbor maintenance fee from official USITC data."
+    />
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body class="bg-paper text-ink antialiased">
+    <a href="#search-input" class="skip-link">Skip to search</a>
+
+    <header class="border-b-2 border-ink bg-white">
+      <div class="mx-auto flex max-w-[1400px] flex-wrap items-baseline gap-x-6 gap-y-2 px-6 py-5">
+        <h1 class="font-display text-xl font-semibold tracking-tight">
+          HTS Tariff Calculator
+        </h1>
+        <p class="text-sm text-ink-500">
+          US import duty from the Harmonized Tariff Schedule
+        </p>
+        <p class="ml-auto text-xs text-ink-400" data-provenance>
+          Loading schedule&hellip;
+        </p>
+      </div>
+    </header>
+
+    <main class="mx-auto grid max-w-[1400px] gap-8 px-6 py-8 lg:grid-cols-[minmax(0,7fr)_minmax(0,9fr)]">
+      <!-- Search -->
+      <section aria-labelledby="search-heading" class="min-w-0">
+        <h2 id="search-heading" class="section-title">1 &middot; Find the classification</h2>
+
+        <div class="panel p-4">
+          <label for="search-input" class="label">Search by keyword or HTS number</label>
+          <input
+            id="search-input"
+            type="search"
+            class="field mt-1.5 w-full"
+            placeholder="cotton t-shirts, lithium batteries, 8471.30&hellip;"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <div class="mt-3 flex flex-wrap items-center gap-4">
+            <label class="flex cursor-pointer items-center gap-2 text-sm text-ink-600">
+              <input type="checkbox" id="leaf-only" class="checkbox" checked />
+              Entry codes only
+            </label>
+            <span class="text-xs text-ink-400" data-result-count></span>
+          </div>
+          <p class="mt-3 text-xs leading-relaxed text-ink-500">
+            A numeric query matches by code prefix. Text matches every term
+            against the full classification path, so
+            <em>knitted cotton shirts</em> narrows further than
+            <em>shirts</em> alone.
+          </p>
+        </div>
+
+        <ul class="results mt-4" data-results role="listbox" aria-label="Search results"></ul>
+        <p class="mt-4 hidden text-sm text-ink-500" data-search-empty></p>
+      </section>
+
+      <!-- Detail + calculator -->
+      <section aria-labelledby="calc-heading" class="min-w-0">
+        <h2 id="calc-heading" class="section-title">2 &middot; Calculate the duty</h2>
+
+        <div data-placeholder class="panel p-8 text-center">
+          <p class="text-sm text-ink-500">
+            Select a classification to calculate duty, fees and the effective rate.
+          </p>
+        </div>
+
+        <div data-detail hidden>
+          <article class="panel overflow-hidden">
+            <div class="border-b border-rule bg-ink-50 px-5 py-4">
+              <div class="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <p class="font-mono text-lg font-semibold tracking-tight" data-code></p>
+                <a
+                  data-verify
+                  href="https://hts.usitc.gov/"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  class="text-xs font-medium text-ink-500 underline decoration-rule underline-offset-2 hover:text-ink"
+                  >Verify on hts.usitc.gov &rarr;</a
+                >
+              </div>
+              <p class="mt-1 text-sm font-medium text-ink-800" data-desc></p>
+              <p class="mt-2 text-xs leading-relaxed text-ink-500" data-path></p>
+            </div>
+            <dl class="grid grid-cols-1 divide-y divide-rule sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+              <div class="px-5 py-3">
+                <dt class="label">Column 1 &middot; General</dt>
+                <dd class="mt-1 font-mono text-sm" data-rate-general></dd>
+              </div>
+              <div class="px-5 py-3">
+                <dt class="label">Column 1 &middot; Special</dt>
+                <dd class="mt-1 font-mono text-xs leading-relaxed" data-rate-special></dd>
+              </div>
+              <div class="px-5 py-3">
+                <dt class="label">Column 2</dt>
+                <dd class="mt-1 font-mono text-sm" data-rate-other></dd>
+              </div>
+            </dl>
+          </article>
+
+          <form class="panel mt-4 p-5" data-form novalidate>
+            <div class="grid gap-4 sm:grid-cols-2">
+              <div>
+                <label for="value" class="label">Customs value (USD)</label>
+                <p class="hint">Transaction value of the goods, exclusive of freight.</p>
+                <input id="value" name="value" type="number" min="0" step="0.01" value="10000" class="field mt-1.5 w-full" />
+              </div>
+              <div>
+                <label for="country" class="label">Country of origin</label>
+                <p class="hint">Where the goods were produced, not shipped from.</p>
+                <select id="country" name="country" class="field mt-1.5 w-full"></select>
+              </div>
+            </div>
+
+            <div data-quantities class="mt-4 hidden">
+              <p class="label">Quantity</p>
+              <p class="hint">This line carries a specific duty, so quantity drives the result.</p>
+              <div class="mt-1.5 grid gap-3 sm:grid-cols-2" data-quantity-fields></div>
+            </div>
+
+            <fieldset class="mt-4">
+              <legend class="label">Mode of transport</legend>
+              <p class="hint">The harbor maintenance fee applies to ocean arrivals only.</p>
+              <div class="mt-1.5 flex flex-wrap gap-2" data-modes>
+                <label class="mode"><input type="radio" name="mode" value="ocean" checked /><span>Ocean</span></label>
+                <label class="mode"><input type="radio" name="mode" value="air" /><span>Air</span></label>
+                <label class="mode"><input type="radio" name="mode" value="other" /><span>Truck / rail</span></label>
+              </div>
+            </fieldset>
+          </form>
+
+          <div class="mt-4" data-output></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="mt-8 border-t border-rule bg-white">
+      <div class="mx-auto max-w-[1400px] space-y-3 px-6 py-8 text-xs leading-relaxed text-ink-500">
+        <p data-footer-provenance></p>
+        <p>
+          Duty rates, unit descriptions and special-programme codes are taken
+          verbatim from the USITC Harmonized Tariff Schedule. Programme
+          membership, CBP user fee amounts and trade-remedy coverage are
+          maintained separately in this application and are not part of that
+          dataset.
+        </p>
+        <p class="font-medium text-ink-700">
+          This is a calculation aid, not customs or legal advice, and it does not
+          determine classification. The tariff classification of goods is the
+          importer's responsibility and carries legal liability. Confirm any
+          figure against the current HTS and a licensed customs broker before
+          relying on it for an entry.
+        </p>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,499 @@
+{
+  "source": "USITC Harmonized Tariff Schedule REST API",
+  "endpoint": "https://hts.usitc.gov/reststop/exportList?from=0101&to=9999&format=JSON&styles=true",
+  "fetchedAt": "2026-08-19T02:18:02.986Z",
+  "rows": 35791,
+  "entries": 25627,
+  "chapters": [
+    {
+      "ch": "01",
+      "title": "Live horses, asses, mules and hinnies:",
+      "count": 91
+    },
+    {
+      "ch": "02",
+      "title": "Meat of bovine animals, fresh or chilled:",
+      "count": 196
+    },
+    {
+      "ch": "03",
+      "title": "Live fish:",
+      "count": 645
+    },
+    {
+      "ch": "04",
+      "title": "Milk and cream, not concentrated nor containing added sugar or other sweetening matter:",
+      "count": 281
+    },
+    {
+      "ch": "05",
+      "title": "Pigs', hogs' or boars' bristles and hair; badger hair and other brushmaking hair; waste of such bristles or hair:",
+      "count": 48
+    },
+    {
+      "ch": "06",
+      "title": "Bulbs, tubers, tuberous roots, corms, crowns and rhizomes, dormant, in growth or in flower; chicory plants and roots other than roots of heading 1212:",
+      "count": 87
+    },
+    {
+      "ch": "07",
+      "title": "Potatoes, fresh or chilled:",
+      "count": 471
+    },
+    {
+      "ch": "08",
+      "title": "Coconuts, Brazil nuts and cashew nuts, fresh or dried, whether or not shelled or peeled:",
+      "count": 290
+    },
+    {
+      "ch": "09",
+      "title": "Coffee, whether or not roasted or decaffeinated; coffee husks and skins; coffee substitutes containing coffee in any proportion:",
+      "count": 102
+    },
+    {
+      "ch": "10",
+      "title": "Wheat and meslin:",
+      "count": 80
+    },
+    {
+      "ch": "11",
+      "title": "Cereal flours other than of wheat or meslin:",
+      "count": 61
+    },
+    {
+      "ch": "12",
+      "title": "Soybeans, whether or not broken:",
+      "count": 200
+    },
+    {
+      "ch": "13",
+      "title": "Lac; natural gums, resins, gum-resins and oleoresins (for example, balsams):",
+      "count": 29
+    },
+    {
+      "ch": "14",
+      "title": "Vegetable materials of a kind used primarily for plaiting (for example, bamboos, rattans, reeds, rushes, osier, raffia, cleaned, bleached or dyed cereal straw, and lime bark):",
+      "count": 16
+    },
+    {
+      "ch": "15",
+      "title": "Pig fat (including lard) and poultry fat, other than that of heading 0209 or 1503:",
+      "count": 137
+    },
+    {
+      "ch": "16",
+      "title": "Other prepared or preserved meat, meat offal, blood or insects:",
+      "count": 212
+    },
+    {
+      "ch": "17",
+      "title": "Cane or beet sugar and chemically pure sucrose, in solid form:",
+      "count": 103
+    },
+    {
+      "ch": "18",
+      "title": "Cocoa paste, whether or not defatted:",
+      "count": 99
+    },
+    {
+      "ch": "19",
+      "title": "Malt extract; food preparations of flour, groats, meal, starch or malt extract, not containing cocoa or containing less than 40 percent by weight of cocoa calculated on a totally defatted basis, not elsewhere specified or included; food preparations of goods of headings 0401 to 0404, not containing cocoa or containing less than 5 percent by weight of cocoa calculated on a totally defatted basis, not elsewhere specified or included:",
+      "count": 122
+    },
+    {
+      "ch": "20",
+      "title": "Vegetables, fruit, nuts and other edible parts of plants, prepared or preserved by vinegar or acetic acid:",
+      "count": 339
+    },
+    {
+      "ch": "21",
+      "title": "Extracts, essences and concentrates, of coffee, tea or maté and preparations with a basis of these products or with a basis of coffee, tea or maté; roasted chicory and other roasted coffee substitutes, and extracts, essences and concentrates thereof:",
+      "count": 126
+    },
+    {
+      "ch": "22",
+      "title": "Waters, including natural or artificial mineral waters and aerated waters, not containing added sugar or other sweetening matter nor flavored; ice and snow:",
+      "count": 142
+    },
+    {
+      "ch": "23",
+      "title": "Flours, meals and pellets, of meat or meat offal, of fish or of crustaceans, molluscs or other aquatic invertebrates, unfit for human consumption; greaves (cracklings):",
+      "count": 77
+    },
+    {
+      "ch": "24",
+      "title": "Unmanufactured tobacco (whether or not threshed or similarly processed); tobacco refuse:",
+      "count": 246
+    },
+    {
+      "ch": "25",
+      "title": "Natural graphite:",
+      "count": 114
+    },
+    {
+      "ch": "26",
+      "title": "Iron ores and concentrates, including roasted iron pyrites:",
+      "count": 122
+    },
+    {
+      "ch": "27",
+      "title": "Coal; briquettes, ovoids and similar solid fuels manufactured from coal:",
+      "count": 162
+    },
+    {
+      "ch": "28",
+      "title": "Fluorine, chlorine, bromine and iodine:",
+      "count": 373
+    },
+    {
+      "ch": "29",
+      "title": "Acyclic hydrocarbons:",
+      "count": 1316
+    },
+    {
+      "ch": "30",
+      "title": "Glands and other organs for organotherapeutic uses, dried, whether or not powdered; extracts of glands or other organs or of their secretions for organotherapeutic uses; heparin and its salts; other human or animal substances prepared for therapeutic or prophylactic uses, not elsewhere specified or included:",
+      "count": 216
+    },
+    {
+      "ch": "31",
+      "title": "Mineral or chemical fertilizers, nitrogenous:",
+      "count": 33
+    },
+    {
+      "ch": "32",
+      "title": "Tanning extracts of vegetable origin; tannins and their salts, ethers, esters and other derivatives:",
+      "count": 183
+    },
+    {
+      "ch": "33",
+      "title": "Essential oils (terpeneless or not), including concretes and absolutes; resinoids; extracted oleoresins; concentrates of essential oils in fats, in fixed oils, in waxes or the like, obtained by enfleurage or maceration; terpenic by products of the deterpenation of essential oils; aqueous distillates and aqueous solutions of essential oils:",
+      "count": 81
+    },
+    {
+      "ch": "34",
+      "title": "Soap; organic surface-active products and preparations for use as soap, in the form of bars, cakes, molded pieces or shapes, whether or not containing soap; organic surface-active products and preparations for washing the skin, in the form of liquid or cream and put up for retail sale, whether or not containing soap; paper, wadding, felt and nonwovens, impregnated, coated or covered with soap or detergent:",
+      "count": 52
+    },
+    {
+      "ch": "35",
+      "title": "Casein, caseinates and other casein derivatives; casein glues:",
+      "count": 37
+    },
+    {
+      "ch": "36",
+      "title": "Safety fuses; detonating cords; percussion or detonating caps; igniters; electric detonators:",
+      "count": 22
+    },
+    {
+      "ch": "37",
+      "title": "Photographic plates and film in the flat, sensitized, unexposed, of any material other than paper, paperboard or textiles; instant print film in the flat, sensitized, unexposed, whether or not in packs:",
+      "count": 80
+    },
+    {
+      "ch": "38",
+      "title": "Artificial graphite; colloidal or semi-colloidal graphite; preparations based on graphite or other carbon in the form of pastes, blocks, plates or other semimanufactures:",
+      "count": 237
+    },
+    {
+      "ch": "39",
+      "title": "Polymers of ethylene, in primary forms:",
+      "count": 367
+    },
+    {
+      "ch": "40",
+      "title": "Natural rubber, balata, gutta-percha, guayule, chicle and similar natural gums, in primary forms or in plates, sheets or strip:",
+      "count": 230
+    },
+    {
+      "ch": "41",
+      "title": "Raw hides and skins of bovine (including buffalo) or equine animals (fresh, or salted, dried, limed, pickled or otherwise preserved, but not tanned, parchment-dressed or further prepared), whether or not dehaired or split:",
+      "count": 211
+    },
+    {
+      "ch": "42",
+      "title": "Trunks, suitcases, vanity cases, attache cases, briefcases, school satchels, spectacle cases, binocular cases, camera cases, musical instrument cases, gun cases, holsters and similar containers; traveling bags, insulated food or beverage bags, toiletry bags, knapsacks and backpacks, handbags, shopping bags, wallets, purses, map cases, cigarette cases, tobacco pouches, tool bags, sports bags, bottle cases, jewelry boxes, powder cases, cutlery cases and similar containers, of leather or of composition leather, of sheeting of plastics, of textile materials, of vulcanized fiber or of paperboard, or wholly or mainly covered with such materials or with paper:",
+      "count": 138
+    },
+    {
+      "ch": "43",
+      "title": "Raw furskins (including heads, tails, paws and other pieces or cuttings, suitable for furriers' use), other than raw hides and skins of heading 4101, 4102 or 4103:",
+      "count": 45
+    },
+    {
+      "ch": "44",
+      "title": "Fuel wood, in logs, in billets, in twigs, in faggots or in similar forms; wood in chips or particles; sawdust and wood waste and scrap, whether or not agglomerated in logs, briquettes, pellets or similar forms:",
+      "count": 639
+    },
+    {
+      "ch": "45",
+      "title": "Natural cork, raw or simply prepared; waste cork; crushed, granulated or ground cork:",
+      "count": 19
+    },
+    {
+      "ch": "46",
+      "title": "Plaits and similar products of plaiting materials, whether or not assembled into strips; plaiting materials, plaits and similar products of plaiting materials, bound together in parallel strands or woven, in sheet form, whether or not being finished articles (for example, mats, matting, screens):",
+      "count": 50
+    },
+    {
+      "ch": "47",
+      "title": "Chemical woodpulp, soda or sulfate, other than dissolving grades:",
+      "count": 31
+    },
+    {
+      "ch": "48",
+      "title": "Uncoated paper and paperboard, of a kind used for writing, printing or other graphic purposes, and non perforated punch-cards and punch tape paper, in rolls or rectangular (including square) sheets, of any size, other than paper of heading 4801 or 4803; hand-made paper and paperboard:",
+      "count": 368
+    },
+    {
+      "ch": "49",
+      "title": "Printed books, brochures, leaflets and similar printed matter, whether or not in single sheets:",
+      "count": 58
+    },
+    {
+      "ch": "50",
+      "title": "Woven fabrics of silk or of silk waste:",
+      "count": 36
+    },
+    {
+      "ch": "51",
+      "title": "Wool, not carded or combed:",
+      "count": 137
+    },
+    {
+      "ch": "52",
+      "title": "Cotton waste (including yarn waste and garnetted stock):",
+      "count": 665
+    },
+    {
+      "ch": "53",
+      "title": "Flax, raw or processed but not spun; flax tow and waste (including yarn waste and garnetted stock):",
+      "count": 71
+    },
+    {
+      "ch": "54",
+      "title": "Sewing thread of man-made filaments, whether or not put up for retail sale:",
+      "count": 325
+    },
+    {
+      "ch": "55",
+      "title": "Synthetic filament tow:",
+      "count": 469
+    },
+    {
+      "ch": "56",
+      "title": "Wadding of textile materials and articles thereof; textile fibers, not exceeding 5 mm in length (flock), textile dust and mill neps:",
+      "count": 98
+    },
+    {
+      "ch": "57",
+      "title": "Carpets and other textile floor coverings, knotted, whether or not made up:",
+      "count": 88
+    },
+    {
+      "ch": "58",
+      "title": "Woven pile fabrics and chenille fabrics, other than fabrics of heading 5802 or 5806:",
+      "count": 134
+    },
+    {
+      "ch": "59",
+      "title": "Textile fabrics coated with gum or amylaceous substances, of a kind used for the outer covers of books or the like; tracing cloth; prepared painting canvas; buckram and similar stiffened textile fabrics of a kind used for hat foundations:",
+      "count": 83
+    },
+    {
+      "ch": "60",
+      "title": "Pile fabrics, including \"long pile\" fabrics and terry fabrics, knitted or crocheted:",
+      "count": 132
+    },
+    {
+      "ch": "61",
+      "title": "Men's or boys' overcoats, carcoats, capes, cloaks, anoraks (including ski-jackets), windbreakers and similar articles, knitted or crocheted, other than those of heading 6103:",
+      "count": 976
+    },
+    {
+      "ch": "62",
+      "title": "Men's or boys' overcoats, carcoats, capes, cloaks, anoraks (including ski jackets), windbreakers and similar articles (including padded, sleeveless jackets), other than those of heading 6203:",
+      "count": 1480
+    },
+    {
+      "ch": "63",
+      "title": "Blankets and traveling rugs:",
+      "count": 280
+    },
+    {
+      "ch": "64",
+      "title": "Waterproof footwear with outer soles and uppers of rubber or plastics, the uppers of which are neither fixed to the sole nor assembled by stitching, riveting, nailing, screwing, plugging or similar processes:",
+      "count": 482
+    },
+    {
+      "ch": "65",
+      "title": "Other headgear, whether or not lined or trimmed:",
+      "count": 81
+    },
+    {
+      "ch": "66",
+      "title": "Umbrellas and sun umbrellas (including walking-stick umbrellas, garden umbrellas and similar umbrellas):",
+      "count": 8
+    },
+    {
+      "ch": "67",
+      "title": "Artificial flowers, foliage and fruit and parts thereof; articles made of artificial flowers, foliage or fruit:",
+      "count": 13
+    },
+    {
+      "ch": "68",
+      "title": "Worked monumental or building stone (except slate) and articles thereof, other than goods of heading 6801; mosaic cubes and the like, of natural stone (including slate), whether or not on a backing; artificially colored granules, chippings and powder, of natural stone (including slate):",
+      "count": 111
+    },
+    {
+      "ch": "69",
+      "title": "Refractory bricks, blocks, tiles and similar refractory ceramic constructional goods, other than those of siliceous fossil meals or similar siliceous earths:",
+      "count": 147
+    },
+    {
+      "ch": "70",
+      "title": "Glass in balls (other than microspheres of heading 7018), rods or tubes, unworked:",
+      "count": 336
+    },
+    {
+      "ch": "71",
+      "title": "Pearls, natural or cultured, whether or not worked or graded but not strung, mounted or set; pearls, natural or cultured, temporarily strung for convenience of transport:",
+      "count": 156
+    },
+    {
+      "ch": "72",
+      "title": "Pig iron and spiegeleisen in pigs, blocks or other primary forms:",
+      "count": 671
+    },
+    {
+      "ch": "73",
+      "title": "Sheet piling of iron or steel, whether or not drilled, punched or made from assembled elements; welded angles, shapes and sections, of iron or steel:",
+      "count": 677
+    },
+    {
+      "ch": "74",
+      "title": "Refined copper and copper alloys, unwrought (other than master alloys of heading 7405):",
+      "count": 160
+    },
+    {
+      "ch": "75",
+      "title": "Nickel mattes, nickel oxide sinters and other intermediate products of nickel metallurgy:",
+      "count": 30
+    },
+    {
+      "ch": "76",
+      "title": "Unwrought aluminum:",
+      "count": 153
+    },
+    {
+      "ch": "78",
+      "title": "Unwrought lead:",
+      "count": 15
+    },
+    {
+      "ch": "79",
+      "title": "Unwrought zinc:",
+      "count": 13
+    },
+    {
+      "ch": "80",
+      "title": "Unwrought tin:",
+      "count": 15
+    },
+    {
+      "ch": "81",
+      "title": "Tungsten (wolfram) and articles thereof, including waste and scrap:",
+      "count": 89
+    },
+    {
+      "ch": "82",
+      "title": "Handtools of the following kinds and base metal parts thereof: spades, shovels, mattocks, picks, hoes, forks and rakes; axes, bill hooks and similar hewing tools; secateurs and pruners of any kind; scythes, sickles, hay knives, hedge shears, timber wedges and other tools of a kind used in agriculture, horticulture or forestry:",
+      "count": 223
+    },
+    {
+      "ch": "83",
+      "title": "Padlocks and locks (key, combination or electrically operated), of base metal; clasps and frames with clasps, incorporating locks, of base metal; keys and parts of any of the foregoing articles, of base metal:",
+      "count": 107
+    },
+    {
+      "ch": "84",
+      "title": "Nuclear reactors; fuel elements (cartridges), non-irradiated, for nuclear reactors; machinery and apparatus for isotopic separation; parts thereof:",
+      "count": 2049
+    },
+    {
+      "ch": "85",
+      "title": "Electric motors and generators (excluding generating sets):",
+      "count": 1142
+    },
+    {
+      "ch": "86",
+      "title": "Rail locomotives powered from an external source of electricity or by electric accumulators (batteries):",
+      "count": 40
+    },
+    {
+      "ch": "87",
+      "title": "Tractors (other than tractors of heading 8709):",
+      "count": 476
+    },
+    {
+      "ch": "88",
+      "title": "Other aircraft (for example, helicopters, airplanes, except unmanned aircraft of heading 8806); spacecraft (including satellites) and suborbital and spacecraft launch vehicles:",
+      "count": 78
+    },
+    {
+      "ch": "89",
+      "title": "Cruise ships, excursion boats, ferry boats, cargo ships, barges and similar vessels for the transport of persons or goods:",
+      "count": 70
+    },
+    {
+      "ch": "90",
+      "title": "Optical fibers and optical fiber bundles; optical fiber cables other than those of heading 8544; sheets and plates of polarizing material; lenses (including contact lenses), prisms, mirrors and other optical elements, of any material, unmounted, other than such elements of glass not optically worked:",
+      "count": 474
+    },
+    {
+      "ch": "91",
+      "title": "Wrist watches, pocket watches and other watches, including stop watches, with case of precious metal or of metal clad with precious metal:",
+      "count": 179
+    },
+    {
+      "ch": "92",
+      "title": "Pianos, including player pianos; harpsichords and other keyboard stringed instruments:",
+      "count": 71
+    },
+    {
+      "ch": "93",
+      "title": "Military weapons, other than revolvers, pistols and the arms of heading 9307:",
+      "count": 80
+    },
+    {
+      "ch": "94",
+      "title": "Seats (other than those of heading 9402), whether or not convertible into beds, and parts thereof:",
+      "count": 340
+    },
+    {
+      "ch": "95",
+      "title": "Video game consoles and machines, table or parlor games, including pinball machines, billiards, special tables for casino games and automatic bowling equipment, amusement machines operated by coins, banknotes, bank cards, tokens or by any other means of payment:",
+      "count": 140
+    },
+    {
+      "ch": "96",
+      "title": "Worked ivory, bone, tortoise-shell, horn, antlers, coral, mother-of-pearl and other animal carving material, and articles of these materials (including articles obtained by molding):",
+      "count": 174
+    },
+    {
+      "ch": "97",
+      "title": "Painting, drawings and pastels, executed entirely by hand, other than drawings of heading 4906 and other than hand-painted or hand-decorated manufacture articles; collages, mosaics and similar decorative plaques:",
+      "count": 35
+    },
+    {
+      "ch": "98",
+      "title": "",
+      "count": 212
+    },
+    {
+      "ch": "99",
+      "title": "",
+      "count": 2222
+    }
+  ]
+}

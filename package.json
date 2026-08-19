@@ -1,0 +1,26 @@
+{
+  "name": "tariff-calculator",
+  "version": "0.1.0",
+  "description": "Static HTS tariff and landed-cost calculator built on USITC Harmonized Tariff Schedule data.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "data": "node --experimental-strip-types scripts/fetch-hts.ts",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "clean": "rm -rf dist node_modules/.vite",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=22.6.0"
+  },
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^26.2.0",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.2.1"
+  }
+}
