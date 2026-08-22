@@ -97,8 +97,40 @@ the scripts, and the reasoning behind the build-time data fetch.
 - No claim anywhere that the app provides customs or legal advice, or that it
   determines classification. The disclaimers in the footer stay.
 
+- **Blanket headings must never auto-apply.** Several reach the same origin and
+  are alternatives, not addends; summing them gave Canada 165%. They are shown
+  with confidence "possible" and their carve-outs offered as claimable
+  exemptions.
+- **List vs blanket is decided by whether a coverage list exists**, never by the
+  description. Every Section 301 heading reads "articles the product of China"
+  and would classify as blanket; doing so stacked eighteen headings into a 618%
+  duty.
+
+- **Never grant goods-based programmes by origin.** C, K, L and B depend on
+  what the goods are. Granting them per country made Chinese EVs and lithium
+  batteries duty-free at the base rate, because the Automotive Products code
+  took 2.5% to Free. `npm run check` catches this exact regression.
+- **The country table is generated**, not a constant. `public/data/countries.json`
+  is built from the General Notes plus the curated memberships in
+  `scripts/parse-notes.ts`, and loaded at runtime like the other data.
+
+- **Rendering lives in `src/ui/render.ts` and must stay pure.** State in, HTML
+  string out, no `document` and no module state. That is what makes the markup
+  testable without a browser, and it is where the unclosed-`<div>` and
+  truncation bugs lived.
+- **Applied and expanded are separate sets** (`src/ui/panel-state.ts`). Deriving
+  the disclosure's open state from whether an exemption was claimed collapsed
+  the list when the user unchecked the last one.
+
 ## Verifying changes
 
 ```bash
-npm run typecheck && npm run build
+npm test && npm run typecheck && npm run check && npm run snapshot && npm run build
 ```
+
+`npm test` needs no data and is the fastest signal — put new parser cases there
+rather than discovering them by rebuilding the dataset. `npm run check` and
+`npm run snapshot` both need `npm run data` to have run.
+
+`npm run check` is the regression suite in `scripts/check-regressions.ts`. It
+needs `npm run data` to have run first.

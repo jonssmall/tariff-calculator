@@ -36,6 +36,14 @@ jobs:
 
       - run: npm ci
 
+      # Cheap gates first. Neither needs the dataset, so a broken parser or a
+      # type error fails in seconds rather than after two PDF downloads.
+      - name: Unit tests
+        run: npm test
+
+      - name: Typecheck
+        run: npm run typecheck
+
       # The Chapter 99 U.S. Notes — which say which goods each Section 301/232
       # heading covers — are published only as a PDF, so the data step needs a
       # PDF text extractor. It is not present on the runner image by default.
@@ -49,6 +57,23 @@ jobs:
       # history for no benefit, since the snapshot is reproducible from the API.
       - name: Fetch tariff schedule from USITC
         run: npm run data
+
+      # Data-dependent checks.
+      #
+      # These block a push but only warn on the nightly run, and the difference
+      # matters. On a schedule the code is byte-identical to the last successful
+      # deploy, so a failure can only mean USITC changed something — and
+      # blocking would keep stale duty rates live at exactly the moment tariffs
+      # moved, which is the worst possible time to stop deploying. On a push the
+      # code did change, so a failure means we broke it and the deploy should
+      # stop. Warnings on the nightly run still surface in the Actions summary.
+      - name: Duty regression cases
+        run: npm run check
+        continue-on-error: ${{ github.event_name == 'schedule' }}
+
+      - name: Structural snapshot
+        run: npm run snapshot
+        continue-on-error: ${{ github.event_name == 'schedule' }}
 
       - name: Build
         env:

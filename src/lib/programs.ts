@@ -71,87 +71,22 @@ export interface Country {
 }
 
 /**
- * Origins the calculator offers.
- *
- * Covers every free-trade-agreement partner, the four Column 2 countries, and
- * the largest sources of US imports. A country absent from this list is not
- * necessarily without preferences — it simply is not enumerated here, and the
- * calculator says so rather than implying Column 1 General is the final answer.
- */
-export const COUNTRIES: Country[] = [
-  { iso: "AU", name: "Australia", programs: ["AU", "C", "K", "L"] },
-  { iso: "BH", name: "Bahrain", programs: ["BH", "K", "L"] },
-  { iso: "BD", name: "Bangladesh", programs: [] },
-  { iso: "BY", name: "Belarus", programs: [], column2: true },
-  { iso: "BR", name: "Brazil", programs: ["C", "K", "L"] },
-  { iso: "KH", name: "Cambodia", programs: [] },
-  { iso: "CA", name: "Canada", programs: ["S", "S+", "B", "C", "K", "L"] },
-  { iso: "CL", name: "Chile", programs: ["CL", "C", "K", "L"] },
-  { iso: "CN", name: "China", programs: ["K", "L"] },
-  { iso: "CO", name: "Colombia", programs: ["CO", "C", "K", "L"] },
-  { iso: "CR", name: "Costa Rica", programs: ["P", "P+", "C", "K", "L"] },
-  { iso: "CU", name: "Cuba", programs: [], column2: true },
-  { iso: "DO", name: "Dominican Republic", programs: ["P", "P+", "C", "K", "L"] },
-  { iso: "EC", name: "Ecuador", programs: ["K", "L"] },
-  { iso: "EG", name: "Egypt", programs: ["K", "L"] },
-  { iso: "SV", name: "El Salvador", programs: ["P", "P+", "C", "K", "L"] },
-  { iso: "ET", name: "Ethiopia", programs: ["D", "K", "L"] },
-  { iso: "FR", name: "France", programs: ["C", "K", "L"] },
-  { iso: "DE", name: "Germany", programs: ["C", "K", "L"] },
-  { iso: "GT", name: "Guatemala", programs: ["P", "P+", "C", "K", "L"] },
-  { iso: "HT", name: "Haiti", programs: ["E", "R", "K", "L"] },
-  { iso: "HN", name: "Honduras", programs: ["P", "P+", "C", "K", "L"] },
-  { iso: "HK", name: "Hong Kong", programs: ["K", "L"] },
-  { iso: "IN", name: "India", programs: ["K", "L"] },
-  { iso: "ID", name: "Indonesia", programs: ["K", "L"] },
-  { iso: "IE", name: "Ireland", programs: ["C", "K", "L"] },
-  { iso: "IL", name: "Israel", programs: ["IL", "C", "K", "L"] },
-  { iso: "IT", name: "Italy", programs: ["C", "K", "L"] },
-  { iso: "JM", name: "Jamaica", programs: ["E", "R", "K", "L"] },
-  { iso: "JP", name: "Japan", programs: ["JP", "C", "K", "L"] },
-  { iso: "JO", name: "Jordan", programs: ["JO", "K", "L"] },
-  { iso: "KE", name: "Kenya", programs: ["D", "K", "L"] },
-  { iso: "KR", name: "Korea, South", programs: ["KR", "C", "K", "L"] },
-  { iso: "MY", name: "Malaysia", programs: ["K", "L"] },
-  { iso: "MX", name: "Mexico", programs: ["S", "S+", "B", "C", "K", "L"] },
-  { iso: "MA", name: "Morocco", programs: ["MA", "K", "L"] },
-  { iso: "NP", name: "Nepal", programs: ["NP", "K", "L"] },
-  { iso: "NL", name: "Netherlands", programs: ["C", "K", "L"] },
-  { iso: "NI", name: "Nicaragua", programs: ["P", "P+", "C", "K", "L"] },
-  { iso: "NG", name: "Nigeria", programs: ["D", "K", "L"] },
-  { iso: "KP", name: "Korea, North", programs: [], column2: true },
-  { iso: "OM", name: "Oman", programs: ["OM", "K", "L"] },
-  { iso: "PK", name: "Pakistan", programs: ["K", "L"] },
-  { iso: "PA", name: "Panama", programs: ["PA", "C", "K", "L"] },
-  { iso: "PE", name: "Peru", programs: ["PE", "C", "K", "L"] },
-  { iso: "PH", name: "Philippines", programs: ["K", "L"] },
-  { iso: "RU", name: "Russia", programs: [], column2: true },
-  { iso: "SA", name: "Saudi Arabia", programs: ["K", "L"] },
-  { iso: "SG", name: "Singapore", programs: ["SG", "C", "K", "L"] },
-  { iso: "ZA", name: "South Africa", programs: ["D", "C", "K", "L"] },
-  { iso: "ES", name: "Spain", programs: ["C", "K", "L"] },
-  { iso: "LK", name: "Sri Lanka", programs: ["K", "L"] },
-  { iso: "CH", name: "Switzerland", programs: ["C", "K", "L"] },
-  { iso: "TW", name: "Taiwan", programs: ["K", "L"] },
-  { iso: "TH", name: "Thailand", programs: ["K", "L"] },
-  { iso: "TR", name: "Turkey", programs: ["K", "L"] },
-  { iso: "AE", name: "United Arab Emirates", programs: ["K", "L"] },
-  { iso: "GB", name: "United Kingdom", programs: ["C", "K", "L"] },
-  { iso: "VN", name: "Vietnam", programs: ["K", "L"] },
-];
-
-/**
  * EU member states, for Chapter 99 notes that scope by the bloc rather than by
  * country ("all countries other than ... the member nations of the European
- * Union"). Only members present in COUNTRIES need listing for matching to work,
- * but the full set is kept so adding a country does not silently break a scope.
+ * Union").
  */
 export const EU_MEMBERS = new Set([
   "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU",
   "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
 ]);
 
-export const COUNTRY_BY_ISO = new Map(COUNTRIES.map((c) => [c.iso, c]));
+/**
+ * The country table is generated at build time into `public/data/countries.json`
+ * and loaded at runtime — every ISO country, with preference-programme
+ * membership read from the General Notes where they publish a roster and stated
+ * in `scripts/parse-notes.ts` where they do not. It is not a constant here
+ * because membership changes by proclamation, not on the HTS revision cycle.
+ */
 
 /** Program codes on a line that the given country can actually claim. */
 export function claimableCodes(country: Country, codesOnLine: string[]): string[] {

@@ -111,10 +111,21 @@
                 <p class="hint">Transaction value of the goods, exclusive of freight.</p>
                 <input id="value" name="value" type="number" min="0" step="0.01" value="10000" class="field mt-1.5 w-full" />
               </div>
-              <div>
+              <div class="combo" data-country-combo>
                 <label for="country" class="label">Country of origin</label>
                 <p class="hint">Where the goods were produced, not shipped from.</p>
-                <select id="country" name="country" class="field mt-1.5 w-full"></select>
+                <input
+                  id="country"
+                  type="text"
+                  class="field mt-1.5 w-full"
+                  role="combobox"
+                  aria-expanded="false"
+                  aria-autocomplete="list"
+                  aria-controls="country-list"
+                  autocomplete="off"
+                  placeholder="Type to search 197 origins&hellip;"
+                />
+                <ul id="country-list" class="combo-list" role="listbox" aria-label="Countries" hidden></ul>
               </div>
             </div>
 
@@ -122,6 +133,20 @@
               <p class="label">Quantity</p>
               <p class="hint">This line carries a specific duty, so quantity drives the result.</p>
               <div class="mt-1.5 grid gap-3 sm:grid-cols-2" data-quantity-fields></div>
+            </div>
+
+            <div class="mt-4">
+              <label class="flex cursor-pointer items-start gap-2">
+                <input type="checkbox" id="chapter98" name="chapter98" class="checkbox mt-0.5" />
+                <span>
+                  <span class="label">Entered under a Chapter 98 provision</span>
+                  <span class="hint block"
+                    >US goods returned, goods exported for repair, and similar. Several
+                    Chapter 99 duties are waived for these entries, and duty is owed on
+                    less than the full value.</span
+                  >
+                </span>
+              </label>
             </div>
 
             <fieldset class="mt-4">
@@ -150,6 +175,12 @@
           maintained separately in this application and are not part of that
           dataset.
         </p>
+        <details class="rounded border border-rule p-3">
+          <summary class="cursor-pointer font-medium text-ink-700">
+            Chapter 99 coverage audit — what this tool does and does not know
+          </summary>
+          <div class="mt-3" data-audit></div>
+        </details>
         <p class="font-medium text-ink-700">
           This is a calculation aid, not customs or legal advice, and it does not
           determine classification. The tariff classification of goods is the

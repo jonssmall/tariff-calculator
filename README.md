@@ -18,6 +18,9 @@ run: it populates `public/data/`, which is not committed.
 | `npm run data` | Fetch the schedule from USITC and rebuild `public/data/` |
 | `npm run dev` | Vite dev server on port 8084 |
 | `npm run build` | Production build into `dist/` |
+| `npm test` | Unit tests — parsers and the duty stack, no data needed |
+| `npm run check` | Duty regression cases with externally-known answers (needs `npm run data`) |
+| `npm run snapshot` | Structural snapshot; `-- --update` to re-record |
 | `npm run typecheck` | `tsc --noEmit` — the only type checker |
 
 ## Why the API call happens at build time
@@ -61,6 +64,17 @@ If USITC is unreachable, `npm run data` fails after four retries, the build
 fails, and the deploy step never runs — the previously published site stays up
 rather than being replaced by a broken one. The same guard rejects a response
 that parses but is implausibly small.
+
+The workflow gates the deploy in this order: unit tests and typecheck first
+(neither needs the dataset, so a broken parser fails in seconds rather than
+after two PDF downloads), then the data fetch, then the regression cases and the
+snapshot, then the build.
+
+The data-dependent checks **block a push but only warn on the nightly run**, and
+the difference matters. On a schedule the code is byte-identical to the last
+successful deploy, so a failure can only mean USITC changed something — and
+blocking would keep stale duty rates live at exactly the moment tariffs moved.
+On a push the code did change, so a failure means it broke and the deploy stops.
 
 Two things to know about the schedule:
 
@@ -137,8 +151,9 @@ The worked example this was built against:
 | `9903.88.03` Section 301 List 3, China | +25% |
 | **Total from China** | **50%** |
 
-The same line from Vietnam is 25% (no Section 301), and from Germany or the UK
-it is 0% — note 37(e) excludes them from the cabinet duty.
+The same line from Vietnam is 25% (no Section 301). Germany is excluded from the
+cabinet duty by note 37(e) but covered by 9903.76.22 at a flat 15% under note
+37(j), which lists the EU member states by name.
 
 `exportList` publishes the headings but not their coverage. That comes from two
 documents in the same release API, both fetched by `scripts/parse-ch99.ts` and
@@ -171,6 +186,46 @@ the old List 4B at 15%, which never came into force, and `9903.01.63` was
 suspended by Federal Register notice. Their coverage tables are still printed in
 the notes, so a parser reading the notes will pick them up and add duty that is
 not owed.
+
+### List rules and blanket rules
+
+Chapter 99 headings come in two shapes and need opposite handling.
+
+**List rules** name the classifications they cover — Section 301 and the
+Section 232 headings. When one matches the code and the origin it is applied
+automatically.
+
+**Blanket rules** cover an origin wholesale and carve exceptions back out:
+"Except for products described in headings 9903.01.11 … articles the product of
+Canada". The IEEPA actions work this way, and they are 169 of the 231
+duty-imposing headings. A list-only model finds no list and reports nothing,
+which is why Canada came back clean when it is anything but.
+
+Where the notes resolve the overlap, they are believed. Heading 9903.01.10
+reaches Canadian goods "other than products described in headings … 9903.76.01,
+9903.76.02 and 9903.76.03", so a Canadian kitchen cabinet that already matches
+the Section 232 cabinet duty drops the 35% blanket instead of showing both.
+Those displacement rules live only in the notes — a heading's own description
+carries a shorter list — and are parsed by `parseHeadingExclusions`.
+
+Only one heading currently states such a rule explicitly, which is the honest
+limit here rather than a parser shortcoming: the notes mostly do not say which
+of several overlapping provisions governs.
+
+Blanket headings are otherwise surfaced but never applied automatically. Several usually
+reach the same origin at once — Canada matches a 35%, a 40% and two
+transshipment provisions — and they are alternatives keyed to dates and CBP
+determinations rather than duties that sum. Adding them produced 165% for goods
+that mostly owe nothing once USMCA is claimed.
+
+Their carve-outs are offered as claimable exemptions. `9903.01.14` exempts goods
+entered free under General Note 11, which is USMCA, and covers most Canadian and
+Mexican shipments. Claiming one waives the duty entirely.
+
+Deciding list vs blanket cannot be done from the description. Every Section 301
+heading reads "articles the product of China", which looks blanket, but each has
+a coverage list; treating them as blanket applied eighteen at once and produced
+a 618% duty. Having a list is what makes a heading list-based.
 
 **Coverage is partial, and the UI says so.** Section 301 is complete, from the
 official table. Section 232 and IEEPA coverage is whatever the note parser could
@@ -205,13 +260,13 @@ to goods that never carried it, which is worse than missing one.
 
 ### Regression cases
 
-These are the cases to re-check after any change to the note parsing.
+`npm run check` runs these. Every one was added because it caught a real defect.
 
 | Line | Origin | Base | Chapter 99 | Effective |
 | --- | --- | --- | --- | ---: |
 | `9403.60.80.93` | China | Free | `9903.76.03` +25%, `9903.88.03` +25% | 50.47% |
 | `9403.60.80.93` | Vietnam | Free | `9903.76.03` +25% | 25.47% |
-| `9403.60.80.93` | Germany | Free | none (excluded) | 0.47% |
+| `9403.60.80.93` | Germany | Free | `9903.76.22` flat 15% | 15.47% |
 | `6109.10.00.12` | China | 16.5% | `9903.88.15` +7.5% | 24.47% |
 | `6109.10.00.12` | Korea | Free | none | 0.47% |
 | `6109.10.00.12` | Russia | 90% (Col 2) | none | 90.47% |
@@ -233,6 +288,34 @@ These are the cases to re-check after any change to the note parsing.
   notice, not resolved.
 - **Informal entries and de minimis**, whose treatment changed materially during
   2025.
+- **Effective dates.** The API declares an `effectivePeriod` field but never
+  populates it, and the notes do not tie headings to dates in any parseable
+  form — only 13 heading descriptions state one. Every heading is therefore
+  treated as currently in force, which is wrong for an entry date in the past
+  and for provisions that have since been superseded.
+
+## Countries
+
+All 197 ISO countries are offered as origins, not a curated shortlist. A country
+with no preference programme still has a correct answer — Column 1 General — so
+omitting it buys nothing. Only membership needs curation.
+
+Membership comes from the General Notes where they publish a roster: GSP
+(GN 4), CBERA (GN 7) and AGOA (GN 16), fetched as PDFs from the same release
+endpoint and matched to ISO codes through a name index. Where the note is
+rules-of-origin text rather than a list — USMCA, CAFTA-DR, CBTPA — membership is
+stated in `scripts/parse-notes.ts`, as are the single-country agreements, where
+the code *is* the country.
+
+Goods-based programmes (Civil Aircraft, Pharmaceutical, dye intermediates, the
+Automotive Products Trade Act) are deliberately **not** granted by origin. They
+turn on what the goods are, and granting them by country makes every line that
+lists one duty-free for everybody — it quietly zeroed the base duty on Chinese
+EVs and lithium batteries during development.
+
+The origin picker is a filtered combobox rather than a select: 197 entries is
+too many to scan, and people reach for "South Korea" when ISO says "Korea,
+South".
 
 ## Source boundaries
 

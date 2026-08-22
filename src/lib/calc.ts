@@ -52,6 +52,12 @@ export interface CalcInput {
   remedies?: RemedyMatch[];
   /** Which of those the user has applied. Defaults to the confirmed ones. */
   appliedHeadings?: Set<string>;
+  /**
+   * Entry claimed under a Chapter 98 provision — US goods returned, goods
+   * exported for repair, and similar. The notes waive several IEEPA duties
+   * outright for such entries.
+   */
+  chapter98?: boolean;
 }
 
 export interface Charge {
@@ -231,7 +237,7 @@ function selectColumn(entry: Entry, country: Country): {
 }
 
 export function calculate(input: CalcInput): CalcResult {
-  const { entry, country, customsValue, quantities, mode, remedies = [] } = input;
+  const { entry, country, customsValue, quantities, mode, remedies = [], chapter98 = false } = input;
   const applied =
     input.appliedHeadings ??
     new Set(remedies.filter((m) => m.confidence === "confirmed").map((m) => m.remedy.heading));
@@ -252,8 +258,88 @@ export function calculate(input: CalcInput): CalcResult {
    */
   let remedyTotal = 0;
   let remedyRate = 0;
+  /** Set when a claimed provision replaces the whole rate rather than adding. */
+  let replacementRate: number | undefined;
+  let replacementFrom: string | undefined;
   for (const match of remedies) {
     if (!applied.has(match.remedy.heading)) continue;
+    /*
+     * A claimed carve-out substitutes its own rate for the parent's.
+     *
+     * Usually that rate is zero and the duty is waived, but not always: the
+     * 35% on Canadian goods excepts crude oil and potash to 10%. Assuming a
+     * carve-out always means "free" would understate those by ten points.
+     * Where several are claimed, the cheapest applies.
+     */
+    /*
+     * A Chapter 98 claim waives the duty entirely where the notes say so.
+     * Checked before the carve-outs because it removes the duty rather than
+     * substituting a rate.
+     */
+    if (chapter98 && match.remedy.chapter98Waives) {
+      charges.push({
+        label: `${match.remedy.heading} — waived under Chapter 98`,
+        amount: 0,
+        formula: `${pct(match.remedy.uplift)} waived; the notes disapply this duty to a valid Chapter 98 entry`,
+        kind: "remedy",
+      });
+      continue;
+    }
+
+    /*
+     * A replacement heading can be matched directly, not only claimed as a
+     * carve-out. Heading 9903.94.41 is reached by its own coverage for a
+     * Japanese car; handling replacement solely in the carve-out branch left it
+     * contributing nothing and reported 2.5% where 15% is owed.
+     */
+    if (match.remedy.replaces !== undefined) {
+      replacementRate = match.remedy.replaces;
+      replacementFrom = match.remedy.heading;
+      continue;
+    }
+
+    const claimed = match.exemptions
+      .filter((e) => applied.has(e.heading))
+      .sort((a, b) => a.uplift - b.uplift)[0];
+
+    /*
+     * A replacement provision sets the total rate rather than adding to it.
+     *
+     * The schedule writes negotiated floors this way: heading 9903.94.41 is a
+     * bare "15%" for Japanese vehicles whose ordinary rate is below 15%, and it
+     * pairs with 9903.94.40, which leaves the rate alone when it is already at
+     * or above 15%. Treating that as an uplift would add 15 points to a 2.5%
+     * car and report 17.5% where 15% is owed.
+     */
+    if (claimed?.replaces !== undefined) {
+      replacementRate = claimed.replaces;
+      replacementFrom = claimed.heading;
+      charges.push({
+        label: `${match.remedy.heading} — rate set to ${pct(claimed.replaces)} by ${claimed.heading}`,
+        amount: 0,
+        formula: `${claimed.heading} replaces the ordinary duty and ${pct(match.remedy.uplift)} uplift with a flat ${pct(claimed.replaces)}`,
+        kind: "remedy",
+      });
+      continue;
+    }
+    if (claimed) {
+      const amount = customsValue * claimed.uplift;
+      remedyTotal += amount;
+      remedyRate += claimed.uplift;
+      charges.push({
+        label:
+          claimed.uplift === 0
+            ? `${match.remedy.heading} — exempt under ${claimed.heading}`
+            : `${match.remedy.heading} — ${pct(claimed.uplift)} under ${claimed.heading}`,
+        amount,
+        formula:
+          claimed.uplift === 0
+            ? `${pct(match.remedy.uplift)} waived by the claimed provision`
+            : `${money(customsValue)} × ${pct(claimed.uplift)}, replacing ${pct(match.remedy.uplift)}`,
+        kind: "remedy",
+      });
+      continue;
+    }
     const amount = customsValue * match.remedy.uplift;
     remedyTotal += amount;
     remedyRate += match.remedy.uplift;
@@ -294,6 +380,28 @@ export function calculate(input: CalcInput): CalcResult {
       formula: `${money(customsValue)} × ${pct(FEES.hmfRate)} — ocean arrivals only`,
       kind: "fee",
     });
+  }
+
+  /*
+   * A replacement rate supersedes both the ordinary duty and every uplift, so
+   * the ledger above is discarded and one line stands in its place.
+   */
+  if (replacementRate !== undefined) {
+    const amount = customsValue * replacementRate;
+    // Fees are unaffected — they are charged on value, not on the duty rate —
+    // so only the duty and uplift lines are replaced.
+    const fees = charges.filter((c) => c.kind === "fee");
+    charges.length = 0;
+    charges.push({
+      label: `Duty — ${pct(replacementRate)} of value, set by ${replacementFrom}`,
+      amount,
+      formula: `${money(customsValue)} × ${pct(replacementRate)}, replacing the ordinary duty and any Chapter 99 uplift`,
+      kind: "duty",
+    });
+    charges.push(...fees);
+    remedyTotal = 0;
+    remedyRate = 0;
+    appliedRate.total = amount;
   }
 
   const feeTotal = mpf + hmf;
@@ -345,6 +453,14 @@ export function calculate(input: CalcInput): CalcResult {
       tone: "warn",
       title: "No additional duties matched — this is not proof there are none",
       body: "Nothing in the Chapter 99 coverage lists this tool could read reaches this classification and origin. Those lists are mined from the U.S. Notes, which state coverage in prose, and the extraction is incomplete: many headings' coverage could not be attributed automatically. Section 301, Section 232 and IEEPA duties frequently apply to lines that show nothing here. Check the Chapter 99 headings directly before relying on this.",
+    });
+  }
+
+  if (chapter98) {
+    notices.push({
+      tone: "info",
+      title: "Chapter 98 entry claimed",
+      body: "Chapter 98 provisions charge duty on something other than the full value of the goods — US goods returned may enter free, and goods exported for repair are dutiable only on the value added abroad. This calculator does not adjust the customs value for that; enter the dutiable value yourself. The Chapter 99 duties the notes waive for such entries have been removed above, subject to CBP accepting the claim.",
     });
   }
 

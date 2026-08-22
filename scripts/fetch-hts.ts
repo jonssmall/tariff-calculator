@@ -25,8 +25,22 @@ import {
   parseHeadingScopes,
   parseNoteRefs,
   parseUplift,
+  parseReplacementRate,
+  parseRateThreshold,
+  parseScopeFromDescription,
+  type RateThreshold,
+  classifyCoverage,
+  parseHeadingExclusions,
+  parseChapter98Waivers,
   type Scope,
 } from "./parse-ch99.ts";
+import {
+  fetchProgramMembership,
+  CURATED,
+  COLUMN_2,
+  ISO_CODES,
+  isoName,
+} from "./parse-notes.ts";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -242,6 +256,25 @@ interface Remedy {
   scope: Scope;
   /** Headings that carve goods out of this one. */
   exceptHeadings: string[];
+  /** "list" = covers enumerated codes; "blanket" = covers an origin wholesale. */
+  kind: "blanket" | "list";
+  /**
+   * Headings that take precedence over this one.
+   *
+   * Read from the notes, which resolve overlap explicitly where they bother to:
+   * heading 9903.01.10 reaches Canadian goods "other than products described in
+   * headings … 9903.76.01, 9903.76.02 and 9903.76.03". Without it a Canadian
+   * kitchen cabinet looks liable for the Section 232 duty and the 35% IEEPA
+   * duty at once, when the note says the second does not reach it.
+   */
+  displacedBy: string[];
+  /**
+   * True when the notes say a Chapter 98 claim waives this duty.
+   *
+   * Chapter 98 covers US goods returned and goods exported for repair, and a
+   * valid claim is one of the few things that removes an IEEPA duty outright.
+   */
+  chapter98Waives?: boolean;
 }
 
 /**
@@ -271,7 +304,13 @@ const chapterOf = (code: string): string => code.replace(/\D/g, "").slice(0, 2).
 async function buildRemedies(
   rows: ApiRow[],
   release: string,
-): Promise<{ remedies: Remedy[]; coverage: Record<string, string[]>; stats: { headings: number; coveredCodes: number; scoped: number; lists: number; section301: number; conflicts: number; suspended: number } }> {
+): Promise<{
+  remedies: Remedy[];
+  coverage: Record<string, string[]>;
+  audit: { family: string; live: number; covered: number; blanket: number; list: number }[];
+  unreachable: { heading: string; uplift: number; description: string }[];
+  stats: { headings: number; coveredCodes: number; scoped: number; lists: number; section301: number; conflicts: number; suspended: number };
+}> {
   process.stdout.write("fetching Chapter 99 notes (PDF)\n");
   const notesText = await fetchChapter99Text(release);
   const lists = parseCoverageLists(notesText);
@@ -301,7 +340,8 @@ async function buildRemedies(
     const description = stripTags(row.description ?? "");
     const rateText = stripTags(row.general ?? "");
     const uplift = parseUplift(rateText);
-    if (uplift === null) continue; // not a simple uplift; nothing to stack
+    const replaces = uplift === null ? parseReplacementRate(rateText) : null;
+    if (uplift === null && replaces === null) continue; // nothing computable
 
     /*
      * Suspended provisions must never be applied.
@@ -330,12 +370,25 @@ async function buildRemedies(
 
     remedies.push({
       heading,
-      uplift,
+      uplift: uplift ?? 0,
+      ...(replaces !== null ? { replaces } : {}),
+      ...((): { threshold?: RateThreshold } => {
+        const threshold = parseRateThreshold(description);
+        return threshold ? { threshold } : {};
+      })(),
       rateText,
       description,
       noteRefs,
-      scope: scopes.get(heading) ?? { kind: "unknown", text: "" },
+      // The notes are preferred: they qualify scope more precisely. The
+      // description is the fallback, and unknown only when neither says.
+      scope:
+        scopes.get(heading) ??
+        parseScopeFromDescription(description) ?? { kind: "unknown", text: "" },
       exceptHeadings,
+      // Provisional: a heading with a coverage list is list-based no matter how
+      // its description reads. Settled below, once all lists are known.
+      kind: classifyCoverage(description),
+      displacedBy: [],
     });
 
     // Section 301 coverage comes from the official table, so skip the
@@ -347,6 +400,35 @@ async function buildRemedies(
   }
 
   for (const [code, heading] of official) addCoverage(code, heading);
+
+  /*
+   * Settle list vs blanket now that coverage is known.
+   *
+   * The description alone cannot decide it. Every Section 301 heading reads
+   * "articles the product of China", which looks blanket, but each has an
+   * explicit coverage list — treating them as blanket applied all eighteen of
+   * them to every Chinese good and produced a 618% duty. Having a list is what
+   * makes a heading list-based; only headings with no list anywhere fall back
+   * to blanket.
+   */
+  const displacement = parseHeadingExclusions(notesText, remedies.map((r) => r.heading));
+  for (const remedy of remedies) {
+    const displaced = displacement.get(remedy.heading);
+    // Carve-outs the user claims are already handled as exemptions; what
+    // matters here is a heading displaced by another duty that applies on its
+    // own, so keep only those.
+    if (displaced) remedy.displacedBy = [...displaced];
+  }
+  process.stdout.write(`  ${displacement.size} headings carry a displacement rule\n`);
+
+  const ch98 = parseChapter98Waivers(notesText);
+  for (const remedy of remedies) if (ch98.has(remedy.heading)) remedy.chapter98Waives = true;
+  process.stdout.write(`  ${ch98.size} headings are waived by a chapter 98 claim\n`);
+
+  const withList = new Set<string>([...official.values(), ...lists.keys()]);
+  for (const remedy of remedies) {
+    if (withList.has(remedy.heading)) remedy.kind = "list";
+  }
 
   /*
    * Cross-check the prose parser against the official table.
@@ -376,12 +458,46 @@ async function buildRemedies(
     );
   }
 
+  /*
+   * Coverage audit.
+   *
+   * Published with the data so every deploy states what it knows. The gaps here
+   * are not random — they cluster by remedy family and by scope shape — and
+   * without a standing report the only way they surface is a client noticing a
+   * wrong number, which is how the Canada gap was found.
+   */
+  const covered = new Set([...coverage.values()].flatMap((s) => [...s]));
+  const audit = new Map<string, { live: number; covered: number; blanket: number; list: number }>();
+  for (const r of remedies) {
+    if (r.uplift <= 0) continue;
+    const family = r.heading.slice(0, 7);
+    const row = audit.get(family) ?? { live: 0, covered: 0, blanket: 0, list: 0 };
+    row.live++;
+    if (r.kind === "blanket" || covered.has(r.heading)) row.covered++;
+    if (r.kind === "blanket") row.blanket++;
+    else row.list++;
+    audit.set(family, row);
+  }
+
+  /*
+   * Headings we cannot reach at all, listed rather than counted.
+   *
+   * A number in an audit tells you there is a gap; the list tells you which
+   * goods it covers. These are the provisions a user could owe and this tool
+   * will never mention on its own.
+   */
+  const unreachable = remedies
+    .filter((r) => r.uplift > 0 && r.kind === "list" && !covered.has(r.heading))
+    .map((r) => ({ heading: r.heading, uplift: r.uplift, description: r.description.slice(0, 160) }));
+
   const flat: Record<string, string[]> = {};
   for (const [code, set] of coverage) flat[code] = [...set];
 
   return {
     remedies,
     coverage: flat,
+    audit: [...audit].sort((a, b) => b[1].live - a[1].live).map(([family, r]) => ({ family, ...r })),
+    unreachable,
     stats: {
       headings: remedies.length,
       coveredCodes: coverage.size,
@@ -394,6 +510,56 @@ async function buildRemedies(
   };
 }
 
+/**
+ * The country table the app offers as origins.
+ *
+ * Every ISO country is listed, not a curated subset. A country with no
+ * preference programme still has a correct answer — Column 1 General — so
+ * omitting it buys nothing and makes the tool look broken to anyone importing
+ * from somewhere unfashionable. Only membership needs curation, and only for
+ * the programmes that have any.
+ */
+async function buildCountries(release: string): Promise<{
+  countries: { iso: string; name: string; programs: string[]; column2?: boolean }[];
+  report: { program: string; found: number; unresolved: number }[];
+}> {
+  const { membership, report } = await fetchProgramMembership(release);
+
+  const byIso = new Map<string, Set<string>>();
+  const grant = (iso: string, code: string): void => {
+    let set = byIso.get(iso);
+    if (!set) byIso.set(iso, (set = new Set()));
+    set.add(code);
+  };
+
+  for (const [code, isos] of Object.entries(CURATED)) for (const iso of isos) grant(iso, code);
+  for (const [code, isos] of membership) for (const iso of isos) grant(iso, code);
+
+  const column2 = new Set(COLUMN_2);
+  const countries = ISO_CODES.map((iso) => {
+    /*
+     * Only origin-based programmes are granted.
+     *
+     * The Civil Aircraft Agreement, the Pharmaceutical Agreement, the dye
+     * intermediates list and the Automotive Products Trade Act turn on what the
+     * goods are, not where they come from, so granting them by origin makes
+     * every line that lists one duty-free for everybody. Doing that quietly
+     * zeroed the base duty on Chinese electric vehicles and lithium batteries —
+     * the Automotive Products code alone took a 2.5% rate to Free. Whether the
+     * goods qualify is a claim the importer makes and this tool cannot check.
+     */
+    const programs = [...(byIso.get(iso) ?? new Set<string>())];
+    return {
+      iso,
+      name: isoName(iso),
+      programs: [...new Set(programs)].sort(),
+      ...(column2.has(iso) ? { column2: true } : {}),
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name));
+
+  return { countries, report };
+}
+
 async function main(): Promise<void> {
   const release = await currentRelease();
   process.stdout.write(`release ${release}\n`);
@@ -402,7 +568,7 @@ async function main(): Promise<void> {
   process.stdout.write(`  ${entries.length} rate-bearing lines\n`);
   assertPlausible(rows, entries);
 
-  const { remedies, coverage, stats } = await buildRemedies(rows, release);
+  const { remedies, coverage, audit, unreachable, stats } = await buildRemedies(rows, release);
   process.stdout.write(
     `  ${stats.headings} remedy headings covering ${stats.coveredCodes.toLocaleString("en-US")} codes` +
       `${stats.suspended > 0 ? `, ${stats.suspended} suspended and excluded` : ""}\n`,
@@ -420,6 +586,20 @@ async function main(): Promise<void> {
   await rm(OUT, { recursive: true, force: true });
   await mkdir(join(OUT, "chapter"), { recursive: true });
   await writeFile(join(OUT, "remedies.json"), JSON.stringify({ remedies, coverage }));
+
+  const { countries, report } = await buildCountries(release);
+  await writeFile(join(OUT, "countries.json"), JSON.stringify(countries));
+  process.stdout.write(
+    `  ${countries.length} countries; programme membership: ` +
+      report.map((r) => `${r.program} ${r.found}`).join(", ") + "\n",
+  );
+
+  const liveTotal = audit.reduce((a, r) => a + r.live, 0);
+  const coveredTotal = audit.reduce((a, r) => a + r.covered, 0);
+  process.stdout.write(
+    `  coverage audit: ${coveredTotal}/${liveTotal} duty-imposing headings reachable ` +
+      `(${((coveredTotal / liveTotal) * 100).toFixed(0)}%)\n`,
+  );
 
   // Per-chapter files: the app fetches only the chapter it needs.
   const byChapter = new Map<string, Entry[]>();
@@ -482,6 +662,9 @@ async function main(): Promise<void> {
       rows: rows.length,
       entries: entries.length,
       remedies: stats,
+      audit,
+      unreachable,
+      countries: countries.length,
       chapters: [...byChapter.keys()].sort().map((ch) => ({
         ch,
         title: titles.get(ch) ?? "",

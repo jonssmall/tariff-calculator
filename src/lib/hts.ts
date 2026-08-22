@@ -44,6 +44,9 @@ export interface Meta {
   rows: number;
   entries: number;
   remedies: { headings: number; coveredCodes: number; scoped: number; lists: number; section301: number; conflicts: number; suspended: number };
+  countries: number;
+  unreachable: { heading: string; uplift: number; description: string }[];
+  audit: { family: string; live: number; covered: number; blanket: number; list: number }[];
   chapters: { ch: string; title: string; count: number }[];
 }
 
@@ -63,6 +66,14 @@ async function fetchJson<T>(path: string): Promise<T> {
 
 export function loadMeta(): Promise<Meta> {
   return fetchJson<Meta>("meta.json");
+}
+
+let countryPromise: Promise<import("./programs.ts").Country[]> | undefined;
+
+/** The full origin list, generated at build time. */
+export function loadCountries(): Promise<import("./programs.ts").Country[]> {
+  countryPromise ??= fetchJson<import("./programs.ts").Country[]>("countries.json");
+  return countryPromise;
 }
 
 let remedyPromise: Promise<import("./remedies.ts").RemedyData> | undefined;

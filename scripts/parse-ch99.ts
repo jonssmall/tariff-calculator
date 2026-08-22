@@ -48,7 +48,7 @@ const BARE_LINE = /^[\s\d.\/]+$/;
 export const digitsOf = (code: string): string => code.replace(/\D/g, "");
 
 /** Download a document from the release and convert it to text. */
-async function fetchDocumentText(release: string, filename: string): Promise<string> {
+export async function fetchDocumentText(release: string, filename: string): Promise<string> {
   const url = `${FILE_API}?release=${encodeURIComponent(release)}&filename=${encodeURIComponent(filename)}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(120_000) });
   if (!res.ok) throw new Error(`"${filename}" request failed: ${res.status} ${res.statusText}`);
@@ -255,6 +255,24 @@ export function parseHeadingCoverage(text: string): Map<string, Set<string>> {
   return coverage;
 }
 
+/**
+ * How a heading defines the goods it reaches.
+ *
+ * Two shapes, and they need opposite treatment. Section 301 enumerates covered
+ * subheadings, so coverage is a list. The IEEPA actions do the reverse: they
+ * hit everything from a country and then carve exceptions out by heading
+ * ("Except for products described in headings 9903.01.11 ... articles the
+ * product of Canada"). A list-only model finds no list for those and silently
+ * reports no duty, which is why Canada, Mexico and Brazil came back clean when
+ * they are anything but.
+ */
+export function classifyCoverage(description: string): "blanket" | "list" {
+  return /^except (as provided|for)/i.test(description.trim()) ||
+    /articles the product of (any country|[A-Z])/i.test(description)
+    ? "blanket"
+    : "list";
+}
+
 /** Which origins a heading reaches. */
 export type Scope =
   | { kind: "country"; name: string }
@@ -329,6 +347,26 @@ export function parseHeadingScopes(text: string, headings: string[]): Map<string
 }
 
 /**
+ * Country scope stated in the heading's own description.
+ *
+ * Used when the notes yield nothing. Many headings name their origin plainly —
+ * "Wood products of the European Union as provided for in subdivisions (d) and
+ * (f)" — and without reading it that heading has unknown scope and is offered
+ * against every origin, so a Korean shipment is asked to consider an EU
+ * provision.
+ */
+export function parseScopeFromDescription(description: string): Scope | null {
+  const text = description.replace(/\s+/g, " ").trim();
+  const m = text.match(
+    /(?:articles|products|goods)\s+(?:the\s+)?(?:product\s+)?of\s+(?:the\s+)?([A-Z][A-Za-z ]{2,40}?)(?:,|\s+as\b|\s+that\b|\s+described\b|\s+provided\b|\s+shall\b|\.|$)/,
+  );
+  if (!m) return null;
+  const name = m[1]!.trim();
+  if (/^any country$/i.test(name)) return { kind: "all" };
+  return { kind: "country", name };
+}
+
+/**
  * Note references cited by a heading's description.
  *
  * Written two ways: "U.S. note 20(f)" and "subdivision (f) of U.S. note 37".
@@ -346,10 +384,205 @@ export function parseNoteRefs(description: string): string[] {
   return [...refs];
 }
 
+/**
+ * A flat ad valorem rate on a Chapter 99 heading, which replaces the ordinary
+ * duty rather than adding to it.
+ *
+ * These come in pairs that make the intent unambiguous:
+ *
+ *   9903.94.40  "The duty provided in the applicable subheading"
+ *               Japanese vehicles whose column 1 rate is >= 15 percent
+ *   9903.94.41  "15%"
+ *               Japanese vehicles whose column 1 rate is <  15 percent
+ *
+ * That is a floor from the US-Japan arrangement: the rate is raised *to* 15%,
+ * not by it. Reading "15%" as an uplift would add it to a 2.5% car and report
+ * 17.5% where 15% is owed.
+ */
+export function parseReplacementRate(rateText: string): number | null {
+  const text = (rateText ?? "").replace(/\s+/g, " ").trim();
+  const m = text.match(/^([\d.]+)\s*%$/);
+  return m ? Number.parseFloat(m[1]!) / 100 : null;
+}
+
 /** The additive percentage a heading imposes, if its rate is a simple uplift. */
 export function parseUplift(rateText: string): number | null {
   const text = (rateText ?? "").replace(/\s+/g, " ").trim();
   if (/^the duty provided in the applicable subheading$/i.test(text)) return 0;
+  // "No change" is how an exemption heading is written: it applies to the
+  // goods but leaves the duty alone. Without this the carve-outs that make
+  // blanket duties correct — USMCA on Canadian goods, for one — are dropped.
+  if (/^no change$/i.test(text)) return 0;
   const m = text.match(/^the duty provided in the applicable subheading\s*(?:\+|plus)\s*([\d.]+)\s*%$/i);
   return m ? Number.parseFloat(m[1]!) / 100 : null;
+}
+
+/**
+ * Which headings displace which.
+ *
+ * Blanket provisions overlap heavily — Canada matches a 35%, a 40% and two
+ * transshipment duties at once — and the notes resolve that overlap explicitly:
+ *
+ *   (j)  For the purposes of heading 9903.01.10, products of Canada, other than
+ *        products described in headings 9903.01.11 … 9903.01.16, 9903.76.01,
+ *        9903.76.02 and 9903.76.03 … shall be subject to an additional 35%.
+ *
+ * The heading's own description carries only part of that list (9903.01.11
+ * through .15); the rest, including the Section 232 headings that take
+ * precedence, appears only here. Without it a Canadian kitchen cabinet looks
+ * liable for both the 232 duty and the 35% IEEPA duty, when the note says the
+ * IEEPA duty does not reach goods the 232 heading already covers.
+ */
+export function parseHeadingExclusions(text: string, headings: string[]): Map<string, Set<string>> {
+  const known = new Set(headings);
+
+  /**
+   * Expand "9903.05.20–9903.05.84" into the headings that exist in that span.
+   *
+   * The notes state precedence over ranges, not lists. Without expansion the
+   * single most valuable rule in the chapter is invisible: the IEEPA reciprocal
+   * duties in 9903.05.20–9903.05.84 do not apply to goods already covered by
+   * the Section 232 headings. That one relationship is why a Chinese kitchen
+   * cabinet owes 50% and not 50% plus a reciprocal tariff on top.
+   */
+  const expandRange = (from: string, to: string): string[] => {
+    const key = (h: string) => Number(h.replace(/\D/g, ""));
+    const lo = key(from);
+    const hi = key(to);
+    if (!(hi > lo)) return [from];
+    return [...known].filter((h) => {
+      const k = key(h);
+      return k >= lo && k <= hi;
+    });
+  };
+
+  /** Every heading a clause names, ranges expanded. */
+  const headingsIn = (clause: string): string[] => {
+    const out: string[] = [];
+    // Ranges first, so their endpoints are not also counted individually.
+    const consumed = new Set<string>();
+    for (const m of clause.matchAll(/(9903\.\d{2}\.\d{2})\s*[–—-]\s*(9903\.\d{2}\.\d{2})/g)) {
+      out.push(...expandRange(m[1]!, m[2]!));
+      consumed.add(m[0]);
+    }
+    let rest = clause;
+    for (const c of consumed) rest = rest.split(c).join(" ");
+    for (const m of rest.matchAll(/9903\.\d{2}\.\d{2}/g)) out.push(m[0]);
+    return [...new Set(out)].filter((h) => known.has(h));
+  };
+  const exclusions = new Map<string, Set<string>>();
+
+  const flat = text
+    .split("\n")
+    .filter((l) => !FURNITURE.test(l))
+    .join(" ")
+    .replace(/\s+/g, " ");
+
+  // "For the purposes of heading X, … other than products described in headings A, B, C"
+  const scopes = /[Ff]or the purposes of heading (9903\.\d{2}\.\d{2})([\s\S]{0,900}?)(?=[Ff]or the purposes of heading |$)/g;
+  let match: RegExpExecArray | null;
+  while ((match = scopes.exec(flat)) !== null) {
+    const heading = match[1]!;
+    if (!known.has(heading)) continue;
+    const body = match[2] ?? "";
+
+    const clause = body.match(
+      /other than (?:products|articles|goods) (?:described|provided for) in (?:heading|subheading)s? ([\s\S]{0,400}?)(?:\band other than\b|\bshall\b|\.\s)/i,
+    );
+    if (!clause) continue;
+
+    const displaced = [...clause[1]!.matchAll(/9903\.\d{2}\.\d{2}/g)].map((m) => m[0]).filter((h) => h !== heading);
+    if (displaced.length === 0) continue;
+
+    let set = exclusions.get(heading);
+    if (!set) exclusions.set(heading, (set = new Set()));
+    for (const h of displaced) set.add(h);
+  }
+
+  /*
+   * The second phrasing, which carries the chapter's most important rule:
+   *
+   *   the additional duties imposed by headings 9903.05.20–9903.05.84 shall not
+   *   apply to: (1) articles of aluminum ... provided for in headings
+   *   9903.82.02 and 9903.82.04–9903.82.26; (2) passenger vehicles ...
+   *
+   * Both sides are ranges. Every heading on the left is displaced by every
+   * heading on the right, which is how a product-specific Section 232 duty
+   * takes precedence over the country-wide reciprocal tariff.
+   */
+  const notApply =
+    /additional duties imposed by (?:heading|subheading)s? ([\d.–—, and-]{5,90}?) shall not apply to ([\s\S]{0,900}?)(?:\. [A-Z]|$)/gi;
+  let clause: RegExpExecArray | null;
+  while ((clause = notApply.exec(flat)) !== null) {
+    const sources = headingsIn(clause[1]!);
+    const targets = headingsIn(clause[2]!).filter((h) => !sources.includes(h));
+    if (sources.length === 0 || targets.length === 0) continue;
+    for (const source of sources) {
+      let set = exclusions.get(source);
+      if (!set) exclusions.set(source, (set = new Set()));
+      for (const t of targets) set.add(t);
+    }
+  }
+
+  return exclusions;
+}
+
+/**
+ * Headings whose duty is waived when entry is claimed under Chapter 98.
+ *
+ * Chapter 98 covers US goods returned, goods exported for repair, and similar
+ * provisions where duty is owed on something other than the full value. The
+ * notes repeatedly say the additional duty "shall not apply to goods for which
+ * entry is properly claimed under a provision of chapter 98", which makes a
+ * Chapter 98 claim one of the few things that removes an IEEPA duty outright.
+ *
+ * The waiver is conditional — the note adds "pursuant to applicable regulations"
+ * and "whenever CBP agrees" — so this is offered to the user as a claim rather
+ * than applied on their behalf.
+ */
+export function parseChapter98Waivers(text: string): Set<string> {
+  const flat = text
+    .split("\n")
+    .filter((l) => !FURNITURE.test(l))
+    .join(" ")
+    .replace(/\s+/g, " ");
+
+  const waived = new Set<string>();
+  const pattern =
+    /additional duties imposed by headings? ((?:9903\.\d{2}\.\d{2}[\s,and]*)+)shall not apply to goods for which entry is properly claimed under a provision of chapter 98/gi;
+  for (const m of flat.matchAll(pattern)) {
+    for (const h of m[1]!.matchAll(/9903\.\d{2}\.\d{2}/g)) waived.add(h[0]);
+  }
+  return waived;
+}
+
+/**
+ * A condition on the ordinary rate that decides whether a heading applies.
+ *
+ * The schedule implements negotiated ceilings as a pair of headings gated on
+ * the column 1 rate:
+ *
+ *   9903.94.40  no change   "...rate of duty under column 1 equal to or
+ *                            greater than 15 percent"
+ *   9903.94.41  15%         "...rate of duty under column 1 less than 15
+ *                            percent"
+ *
+ * Exactly one of each pair can apply, and which one is fully determined by the
+ * base rate — so offering both, as happens without this, asks the user to
+ * decide something the data already answers.
+ */
+export interface RateThreshold {
+  op: "gte" | "lt";
+  rate: number;
+}
+
+export function parseRateThreshold(description: string): RateThreshold | null {
+  const m = description.match(
+    /rate of duty under column 1 (equal to or greater than|less than) ([\d.]+) percent/i,
+  );
+  if (!m) return null;
+  return {
+    op: /less than/i.test(m[1]!) ? "lt" : "gte",
+    rate: Number.parseFloat(m[2]!) / 100,
+  };
 }

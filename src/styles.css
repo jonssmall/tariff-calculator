@@ -248,7 +248,10 @@
   }
   .remedy {
     display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
+    /* The amount column is fixed, not auto. Sized to content it resizes when
+       the text swaps between a figure and "exempt", which shifts the body
+       column and visibly narrows the exclusion list under the cursor. */
+    grid-template-columns: auto minmax(0, 1fr) 5.5rem;
     gap: 0.625rem;
     align-items: start;
     padding: 0.5rem;
@@ -313,10 +316,94 @@
     text-align: right;
     white-space: nowrap;
     color: var(--color-ink-400);
+    /* Never let this column drive layout. */
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
   .remedy-on .remedy-amount {
     color: var(--color-ink);
     font-weight: 600;
+  }
+
+  /* Origin combobox. 197 entries is too many to scan in a plain select, and
+     users reach for "South Korea" when the list says "Korea, South". */
+  .combo {
+    position: relative;
+  }
+  .combo-list {
+    position: absolute;
+    z-index: 20;
+    top: 100%;
+    left: 0;
+    right: 0;
+    max-height: 15rem;
+    overflow-y: auto;
+    margin-top: 0.25rem;
+    background: white;
+    border: 1px solid var(--color-ink);
+    border-radius: 4px;
+    box-shadow: 0 8px 20px oklch(0.24 0.012 260 / 0.14);
+  }
+  .combo-option {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.75rem;
+    padding: 0.4rem 0.625rem;
+    font-size: 0.8125rem;
+    cursor: pointer;
+  }
+  .combo-option[aria-selected="true"],
+  .combo-option:hover {
+    background: var(--color-ink-100);
+  }
+  .combo-tag {
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-ink-400);
+    white-space: nowrap;
+  }
+  .combo-tag[data-col2="true"] {
+    color: var(--color-remedy);
+    font-weight: 600;
+  }
+
+  .remedy-exempt {
+    margin-top: 0.35rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--color-rule);
+  }
+  .remedy-exempt > summary {
+    cursor: pointer;
+    font-size: 0.6875rem;
+    color: var(--color-ink-500);
+    padding: 0.1rem 0;
+  }
+  .remedy-exempt > summary:hover {
+    color: var(--color-ink);
+  }
+  /* A single heading can carry twenty exclusions; expanded, that is taller than
+     the viewport. Scroll the list rather than push the ledger off screen. */
+  .remedy-exempt-list {
+    max-height: 11rem;
+    overflow-y: auto;
+    padding-right: 0.25rem;
+  }
+  .remedy-exempt label {
+    margin-top: 0.25rem;
+  }
+  .remedy-exempt label {
+    display: flex;
+    align-items: start;
+    gap: 0.4rem;
+    font-size: 0.6875rem;
+    line-height: 1.45;
+    color: var(--color-ink-600);
+    cursor: pointer;
+  }
+  .remedy-exempt input {
+    margin-top: 0.12rem;
+    accent-color: var(--color-free);
   }
 
   .notice {

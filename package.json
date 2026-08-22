@@ -10,6 +10,9 @@
     "build": "vite build",
     "preview": "vite preview",
     "clean": "rm -rf dist node_modules/.vite",
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "snapshot": "node --experimental-strip-types scripts/snapshot.ts",
+    "check": "node --experimental-strip-types scripts/check-regressions.ts",
     "typecheck": "tsc --noEmit"
   },
   "engines": {
@@ -18,7 +21,9 @@
   "license": "UNLICENSED",
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",
+    "@types/jsdom": "^30.0.0",
     "@types/node": "^26.2.0",
+    "jsdom": "^30.0.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.9.3",
     "vite": "^8.2.1"
