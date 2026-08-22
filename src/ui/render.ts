@@ -81,6 +81,21 @@ export function renderRemedies(view: RemedyView): string {
   const { matches, applied, expanded, customsValue } = view;
   if (matches.length === 0) return "";
 
+  /*
+   * Reasons shared by several rows are said once, above them.
+   *
+   * The explanation for a blanket heading is generic and identical on every
+   * blanket row — a 321-character paragraph about overlapping provisions. On a
+   * phone that was 112 pixels per row and roughly a quarter of the whole band,
+   * repeating the same sentences four times. Row-specific reasons ("the notes
+   * apply this heading to products of China") stay where they are, because
+   * those differ per row and are the point.
+   */
+  const reasonCounts = new Map<string, number>();
+  for (const m of matches) reasonCounts.set(m.reason, (reasonCounts.get(m.reason) ?? 0) + 1);
+  const shared = [...reasonCounts.entries()].filter(([, n]) => n > 1).map(([reason]) => reason);
+  const isShared = new Set(shared);
+
   const rows = matches
     .map((match) => {
       const on = applied.has(match.remedy.heading);
@@ -132,8 +147,9 @@ export function renderRemedies(view: RemedyView): string {
         (match.confidence === "possible" ? `<span class="remedy-flag">verify</span>` : "") +
         `</span>` +
         `<span class="remedy-desc">${escapeHtml(description)}</span>` +
-        `<span class="remedy-reason">${escapeHtml(match.reason)}${notes ? ` · ${escapeHtml(notes)}` : ""}` +
-        (match.matchedOn === "origin" ? " · applies to all goods of this origin" : "") +
+        `<span class="remedy-reason">${isShared.has(match.reason) ? "" : escapeHtml(match.reason)}` +
+        `${notes ? `${isShared.has(match.reason) ? "" : " · "}${escapeHtml(notes)}` : ""}` +
+        (match.matchedOn === "origin" ? `${notes ? " · " : ""}applies to all goods of this origin` : "") +
         `</span>` +
         exemptions +
         `</span>` +
@@ -155,6 +171,7 @@ export function renderRemedies(view: RemedyView): string {
     `<div class="remedy-block">` +
     `<p class="label">Additional duties · Chapter 99</p>` +
     `<p class="hint">Section 301, Section 232 and IEEPA duties are separate headings declared alongside the classification, and they stack on the rate above. Switch a heading off to exclude it.</p>` +
+    shared.map((reason) => `<p class="hint remedy-shared-reason">${escapeHtml(reason)}</p>`).join("") +
     `<div class="mt-2">${rows}</div></div>`
   );
 }

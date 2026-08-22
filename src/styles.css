@@ -305,6 +305,15 @@
     line-height: 1.45;
     color: var(--color-ink-700);
   }
+  .remedy-shared-reason {
+    margin-top: 0.4rem;
+    padding-left: 0.6rem;
+    border-left: 2px solid var(--color-rule);
+  }
+  /* Nothing to show once its text was hoisted. */
+  .remedy-reason:empty {
+    display: none;
+  }
   .remedy-reason {
     font-size: 0.6875rem;
     line-height: 1.45;
@@ -323,6 +332,31 @@
   .remedy-on .remedy-amount {
     color: var(--color-ink);
     font-weight: 600;
+  }
+
+  /* Narrow viewports reflow the row.
+     The fixed amount column exists so the figure swapping to "exempt" cannot
+     shift the layout, but on a 375px screen it took 88 of the row's 259
+     pixels and left the text 121 — barely twenty characters, which wrapped a
+     legal description to eight lines. Below 640px the amount moves up beside
+     the checkbox and the text takes the full width instead. */
+  @media (max-width: 640px) {
+    .remedy {
+      grid-template-columns: auto minmax(0, 1fr);
+      row-gap: 0.35rem;
+    }
+    .remedy-amount {
+      grid-row: 1;
+      grid-column: 2;
+      align-self: center;
+    }
+    .remedy-body {
+      grid-row: 2;
+      grid-column: 1 / -1;
+    }
+    .remedy-exempt-list {
+      max-height: 14rem;
+    }
   }
 
   /* Origin combobox. 197 entries is too many to scan in a plain select, and
