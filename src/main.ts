@@ -6,7 +6,7 @@
  * than the problem needs. Rendering is a full redraw of the output panel on
  * every input change, which at this size is cheaper than reconciling.
  */
-import { search, getEntry, loadMeta, loadRemedies, loadCountries, type Entry, type Hit } from "./lib/hts.ts";
+import { search, getEntry, loadIndex, loadMeta, loadRemedies, loadCountries, type Entry, type Hit } from "./lib/hts.ts";
 import { parseRate, parseSpecial, requiredUnits, unitLabel } from "./lib/rates.ts";
 import { calculate, type Mode } from "./lib/calc.ts";
 import { matchRemedies, type RemedyData, type RemedyMatch } from "./lib/remedies.ts";
@@ -172,6 +172,24 @@ function renderUnreachable(rows: { heading: string; uplift: number; description:
 }
 
 /* -------------------------------------------------------------------- search */
+
+/*
+ * Start fetching the search index immediately rather than on the first
+ * keystroke.
+ *
+ * The index is 468 KB gzipped and costs about 64 ms to parse and hydrate on a
+ * desktop, several times that on a phone. None of that is slow in itself; the
+ * problem was when it happened. Fetching it lazily meant a half-megabyte
+ * download began the moment someone typed, so the wait landed exactly when
+ * they were watching for results. Started here it overlaps with the seconds
+ * they spend reading the form instead.
+ *
+ * `loadIndex()` is idempotent and caches its promise, so the first search
+ * either finds it ready or awaits the same request already in flight.
+ */
+void loadIndex().catch(() => {
+  // A failure here is not fatal: the first search retries and surfaces it.
+});
 
 let searchToken = 0;
 
